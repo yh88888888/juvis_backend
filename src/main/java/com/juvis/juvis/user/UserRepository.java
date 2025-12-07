@@ -13,10 +13,10 @@ import lombok.RequiredArgsConstructor;
 public class UserRepository {
     private final EntityManager em;
 
-    public Optional<User> findByEmail(String email) {
+    public Optional<User> findByName(String name) {
         try {
-            User userPS = em.createQuery("select u from User u where u.email = :email", User.class)
-                    .setParameter("email", email)
+            User userPS = em.createQuery("select u from User u where u.name = :name", User.class)
+                    .setParameter("name", name)
                     .getSingleResult();
             return Optional.of(userPS);
         } catch (Exception e) {

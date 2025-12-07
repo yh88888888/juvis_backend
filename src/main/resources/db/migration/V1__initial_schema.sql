@@ -1,40 +1,66 @@
 -- Schema
---CREATE SCHEMA IF NOT EXISTS maintenance_app DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
---USE maintenance_app;
+-- CREATE SCHEMA IF NOT EXISTS maintenance_app DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+-- USE maintenance_app;
+
+-- 1) 기존 DB 삭제
+DROP DATABASE IF EXISTS maintenance_app;
+
+-- 2) 새로 생성
+CREATE DATABASE maintenance_app
+  DEFAULT CHARACTER SET utf8mb4
+  COLLATE utf8mb4_0900_ai_ci;
+
+-- 3) 사용 DB 선택 (선택사항)
+USE maintenance_app;
+
+CREATE TABLE flyway_schema_history (
+    installed_rank INT NOT NULL,
+    version VARCHAR(50),
+    description VARCHAR(200) NOT NULL,
+    type VARCHAR(20) NOT NULL,
+    script VARCHAR(1000) NOT NULL,
+    checksum INT,
+    installed_by VARCHAR(100) NOT NULL,
+    installed_on TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    execution_time INT NOT NULL,
+    success TINYINT(1) NOT NULL,
+    PRIMARY KEY (installed_rank),
+    KEY flyway_schema_history_s_idx (success)
+);
+
 
 -- 1) branch
 CREATE TABLE branch (
-  branch_id   BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-  branch_name VARCHAR(100)    NOT NULL,
-  manager_name VARCHAR(100),
-  phone       VARCHAR(20),
-  created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  branch_id     BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  branch_name   VARCHAR(100)    NOT NULL,         -- 지점명
+  phone         VARCHAR(20),                      -- 지점 대표번호
+  address_name  VARCHAR(200),                     -- 지점 주소
+  created_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (branch_id),
-  UNIQUE KEY uk_branch_name (branch_name)
+  UNIQUE KEY uk_branch_name (branch_name)         -- 지점명 유니크
 ) ENGINE=InnoDB;
 
 -- 2) user
-CREATE TABLE user_account (
-  user_id     BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-  username    VARCHAR(50)     NOT NULL,
-  password    VARCHAR(255)    NOT NULL,
-  name        VARCHAR(100)    NOT NULL,
-  email       VARCHAR(100),
-  phone       VARCHAR(20),
-  role        ENUM('BRANCH','HQ','VENDOR') NOT NULL,
-  branch_id   BIGINT UNSIGNED NULL,
-  is_active   TINYINT(1) NOT NULL DEFAULT 1,
-  created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+CREATE TABLE user_tb (
+  user_id    BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  username   VARCHAR(50)  NOT NULL,               -- 로그인 아이디
+  password   VARCHAR(255) NOT NULL,               -- 비밀번호(해시)
+  name       VARCHAR(100) NULL,                   -- 사용자 이름
+  phone      VARCHAR(20)  NULL,                   -- 사용자 개인 휴대폰 번호
+  role      ENUM('BRANCH','HQ','VENDOR') NOT NULL DEFAULT 'BRANCH',
+  is_active  BOOLEAN NOT NULL DEFAULT TRUE,       -- 활성/비활성
+  branch_id  BIGINT UNSIGNED NULL,                -- BRANCH일 경우 지점 FK
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (user_id),
   UNIQUE KEY uk_user_username (username),
-  UNIQUE KEY uk_user_email (email),
   KEY idx_user_role (role),
   KEY idx_user_branch (branch_id),
   CONSTRAINT fk_user_branch
     FOREIGN KEY (branch_id) REFERENCES branch(branch_id)
     ON UPDATE RESTRICT ON DELETE SET NULL
 ) ENGINE=InnoDB;
+
 
 -- 3) maintenance_request
 CREATE TABLE maintenance_request (
@@ -43,32 +69,62 @@ CREATE TABLE maintenance_request (
   requester_id   BIGINT UNSIGNED NOT NULL,
   title          VARCHAR(200)    NOT NULL,
   description    TEXT,
-  urgency        ENUM('LOW','MEDIUM','HIGH') NOT NULL DEFAULT 'MEDIUM',
-  status         ENUM('REQUESTED','ESTIMATING','APPROVAL_PENDING','IN_PROGRESS','COMPLETED','REJECTED') NOT NULL DEFAULT 'REQUESTED',
+  status         ENUM('DRAFT','REQUESTED',          -- 지점이 요청 제출
+    'ESTIMATING',         -- HQ가 vendor에게 견적 요청
+    'APPROVAL_PENDING',   -- vendor가 견적 제출 → HQ 승인 대기
+    'IN_PROGRESS',        -- 승인 후 공사 진행 중
+    'COMPLETED',          -- 공사 완료
+    'REJECTED'            -- HQ가 반려
+    ) NOT NULL DEFAULT 'DRAFT',
+
+  category       ENUM('ELECTRICAL_COMMUNICATION',
+    'LIGHTING',
+    'HVAC',
+    'WATER_SUPPLY_DRAINAGE',
+    'SAFETY_HYGIENE',
+    'ETC';
+    ) NOT NULL DEFAULT 'DRAFT',
+
   vendor_id      BIGINT UNSIGNED NULL,
-  approved_by    BIGINT UNSIGNED NULL,
-  approved_at    DATETIME NULL,
+
+  -- 견적 / 일정 / 사유
+  estimate_amount      DECIMAL(15,2) NULL,
+  estimate_comment     TEXT         NULL,
+  work_start_date      DATE         NULL,
+  work_end_date        DATE         NULL,
+  rejected_reason      VARCHAR(500) NULL,
+
+  -- 타임스탬프
+  submitted_at         DATETIME NULL, -- 지점이 정식 제출한 시점
+  vendor_submitted_at  DATETIME NULL, -- 벤더가 견적 제출한 시점
+  approved_by          BIGINT UNSIGNED NULL,
+  approved_at          DATETIME NULL,
+
   created_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
   PRIMARY KEY (request_id),
   KEY idx_mr_branch (branch_id),
   KEY idx_mr_status (status),
+  KEY idx_mr_category (category),
   KEY idx_mr_vendor (vendor_id),
   KEY idx_mr_requester (requester_id),
   KEY idx_mr_created (created_at),
+
   CONSTRAINT fk_mr_branch
     FOREIGN KEY (branch_id) REFERENCES branch(branch_id)
     ON UPDATE RESTRICT ON DELETE RESTRICT,
   CONSTRAINT fk_mr_requester
-    FOREIGN KEY (requester_id) REFERENCES user_account(user_id)
+    FOREIGN KEY (requester_id) REFERENCES user_tb(user_id)
     ON UPDATE RESTRICT ON DELETE RESTRICT,
   CONSTRAINT fk_mr_vendor
-    FOREIGN KEY (vendor_id) REFERENCES user_account(user_id)
+    FOREIGN KEY (vendor_id) REFERENCES user_tb(user_id)
     ON UPDATE RESTRICT ON DELETE SET NULL,
   CONSTRAINT fk_mr_approved_by
-    FOREIGN KEY (approved_by) REFERENCES user_account(user_id)
+    FOREIGN KEY (approved_by) REFERENCES user_tb(user_id)
     ON UPDATE RESTRICT ON DELETE SET NULL
 ) ENGINE=InnoDB;
+
 
 -- 4) estimate
 CREATE TABLE estimate (
@@ -88,7 +144,7 @@ CREATE TABLE estimate (
     FOREIGN KEY (request_id) REFERENCES maintenance_request(request_id)
     ON UPDATE RESTRICT ON DELETE CASCADE,
   CONSTRAINT fk_est_vendor
-    FOREIGN KEY (vendor_id) REFERENCES user_account(user_id)
+    FOREIGN KEY (vendor_id) REFERENCES user_tb(user_id)
     ON UPDATE RESTRICT ON DELETE RESTRICT
 ) ENGINE=InnoDB;
 
@@ -111,7 +167,7 @@ CREATE TABLE work_order (
     FOREIGN KEY (request_id) REFERENCES maintenance_request(request_id)
     ON UPDATE RESTRICT ON DELETE CASCADE,
   CONSTRAINT fk_wo_vendor
-    FOREIGN KEY (vendor_id) REFERENCES user_account(user_id)
+    FOREIGN KEY (vendor_id) REFERENCES user_tb(user_id)
     ON UPDATE RESTRICT ON DELETE RESTRICT
 ) ENGINE=InnoDB;
 
@@ -135,7 +191,7 @@ CREATE TABLE file_attachment (
     FOREIGN KEY (work_id) REFERENCES work_order(work_id)
     ON UPDATE RESTRICT ON DELETE SET NULL,
   CONSTRAINT fk_fa_uploader
-    FOREIGN KEY (uploaded_by) REFERENCES user_account(user_id)
+    FOREIGN KEY (uploaded_by) REFERENCES user_tb(user_id)
     ON UPDATE RESTRICT ON DELETE RESTRICT
 ) ENGINE=InnoDB;
 
@@ -153,7 +209,7 @@ CREATE TABLE comment (
     FOREIGN KEY (request_id) REFERENCES maintenance_request(request_id)
     ON UPDATE RESTRICT ON DELETE CASCADE,
   CONSTRAINT fk_c_user
-    FOREIGN KEY (user_id) REFERENCES user_account(user_id)
+    FOREIGN KEY (user_id) REFERENCES user_tb(user_id)
     ON UPDATE RESTRICT ON DELETE RESTRICT
 ) ENGINE=InnoDB;
 
@@ -170,7 +226,7 @@ CREATE TABLE notification (
   KEY idx_n_user (user_id),
   KEY idx_n_isread (is_read),
   CONSTRAINT fk_n_user
-    FOREIGN KEY (user_id) REFERENCES user_account(user_id)
+    FOREIGN KEY (user_id) REFERENCES user_tb(user_id)
     ON UPDATE RESTRICT ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
@@ -187,8 +243,8 @@ CREATE TABLE activity_log (
   KEY idx_al_req (request_id),
   KEY idx_al_created (created_at),
   CONSTRAINT fk_al_user
-    FOREIGN KEY (user_id) REFERENCES user_account(user_id)
-    ON UPDATE RESTRICT ON DELETE SET NULL,   -- (원한다면 CASCADE/RESTRICT로 조정)
+    FOREIGN KEY (user_id) REFERENCES user_tb(user_id)
+    ON UPDATE RESTRICT ON DELETE RESTRICT,
   CONSTRAINT fk_al_req
     FOREIGN KEY (request_id) REFERENCES maintenance_request(request_id)
     ON UPDATE RESTRICT ON DELETE CASCADE

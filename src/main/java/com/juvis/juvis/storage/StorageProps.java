@@ -14,9 +14,10 @@ import org.springframework.validation.annotation.Validated;
 @Validated
 @ConfigurationProperties(prefix = "storage")
 public class StorageProps {
-    @NotBlank
+    // @NotBlank
     private String bucket;
-    @Min(60)
-    @Max(3600)
-    private int presignExpSeconds = 900;   // Presigned TTL
+    // @Min(60)
+    // @Max(3600)
+    // private int presignExpSeconds = 900;  
+ // Presigned TTL
 }
