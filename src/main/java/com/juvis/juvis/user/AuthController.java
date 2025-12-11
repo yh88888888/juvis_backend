@@ -18,12 +18,6 @@ public class AuthController {
 
     private final UserService userService;
 
-    @PostMapping("/api/auth/join")
-    public ResponseEntity<?> join(@Valid @RequestBody UserRequest.JoinDTO reqDTO, Errors errors) {
-        var respDTO = userService.join(reqDTO);
-        return Resp.ok(respDTO);
-    }
-
     @PostMapping("/api/auth/login")
     public ResponseEntity<?> login(@Valid @RequestBody UserRequest.LoginDTO reqDTO, Errors errors) {
         var respDTO = userService.login(reqDTO);

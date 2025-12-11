@@ -3,6 +3,7 @@ package com.juvis.juvis._core.util;
 import com.auth0.jwt.JWT;
 import com.auth0.jwt.algorithms.Algorithm;
 import com.auth0.jwt.interfaces.DecodedJWT;
+import com.juvis.juvis._core.enums.UserRole;
 import com.juvis.juvis.user.User;
 
 import java.util.Date;
@@ -21,7 +22,7 @@ public class JwtUtil {
                 .withSubject(user.getUsername()) // 토큰의 주체
                 .withExpiresAt(new Date(System.currentTimeMillis() + EXPIRATION_TIME)) // 토큰 만료 시간
                 .withClaim("id", user.getId()) // 사용자 ID 클레임 추가
-                .withClaim("roles", user.getRoles()) // 사용자 역할 클레임 추가
+                .withClaim("role", user.getRole().name()) // 사용자 역할 클레임 추가
                 .sign(Algorithm.HMAC512(SECRET)); // 비밀 키로 서명
 
         return TOKEN_PREFIX + jwt; // "Bearer " 접두사 붙여 반환
@@ -35,9 +36,9 @@ public class JwtUtil {
 
         Integer id = decodedJWT.getClaim("id").asInt();
         String username = decodedJWT.getSubject();
-        String roles = decodedJWT.getClaim("roles").asString();
+        String roleString = decodedJWT.getClaim("role").asString();
+        UserRole role = UserRole.valueOf(roleString);
 
-
-        return User.builder().id(id).username(username).roles(roles).build();
+        return User.builder().id(id).username(username).role(role).build();
     }
 }

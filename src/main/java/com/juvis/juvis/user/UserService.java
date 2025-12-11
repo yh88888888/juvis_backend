@@ -25,19 +25,6 @@ public class UserService {
     private final BCryptPasswordEncoder bCryptPasswordEncoder;
 
     @Transactional
-    public UserResponse.JoinDTO join(UserRequest.JoinDTO reqDTO) {
-        userRepository.findByUsername(reqDTO.getUsername()).ifPresent(user -> {
-            throw new ExceptionApi400("이미 존재하는 username입니다.");
-        });
-
-        String encodedPassword = bCryptPasswordEncoder.encode(reqDTO.getPassword());
-        User userPS = userRepository.save(reqDTO.toEntity(encodedPassword));
-
-        log.info("[User Join] id={}, username={} 신규 회원 가입 성공", userPS.getId(), userPS.getUsername());
-
-        return new UserResponse.JoinDTO(userPS);
-    }
-
     public UserResponse.LoginDTO login(UserRequest.LoginDTO loginDTO) {
         User userPS = userRepository.findByUsername(loginDTO.getUsername())
                 .orElseThrow(() -> new ExceptionApi401("유저네임 혹은 비밀번호가 틀렸습니다"));
@@ -65,7 +52,7 @@ public class UserService {
         });
 
         // 3) branchName 중복 체크
-        branchRepository.findByName(reqDTO.getBranchName()).ifPresent(b -> {
+        branchRepository.findByBranchName(reqDTO.getBranchName()).ifPresent(b -> {
             throw new ExceptionApi400("이미 존재하는 지점명입니다.");
         });
 

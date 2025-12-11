@@ -27,8 +27,8 @@ public class Resp<T> {
         return resp;
     }
 
-    public static ResponseEntity<Resp<?>> forbidden(String msg) {
-        Resp<?> resp = new Resp<>(403, msg, null);
+    public static <B> ResponseEntity<Resp<B>> forbidden(String msg) {
+        Resp<B> resp = new Resp<>(HttpStatus.FORBIDDEN.value(), msg, null);
         return new ResponseEntity<>(resp, HttpStatus.FORBIDDEN);
     }
 }

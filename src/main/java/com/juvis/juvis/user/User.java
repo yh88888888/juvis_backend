@@ -40,13 +40,13 @@ public class User implements UserDetails {
     private String password;
 
     @Column(length = 100, nullable = true)
-    private String name;
+    private String name; // HQ, VENDOR만 해당
 
     @Column(length = 20, nullable = true)
-    private String phone;
+    private String phone; // HQ, VENDOR만 해당
 
     @Column(length = 200, nullable = true)
-    private String address;
+    private String address; // HQ, VENDOR만 해당
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 10)
@@ -65,8 +65,9 @@ public class User implements UserDetails {
     private boolean active = true;
 
     @Builder
-    public User(Integer id, String username, String password, String name, String phone, String address, UserRole role, Branch branch, 
-            LocalDateTime createdAt, LocalDateTime updatedAt,boolean active) {
+    public User(Integer id, String username, String password, String name, String phone, String address, UserRole role,
+            Branch branch,
+            LocalDateTime createdAt, LocalDateTime updatedAt, boolean active) {
         this.id = id;
 
         this.username = username;
@@ -75,6 +76,7 @@ public class User implements UserDetails {
         this.phone = phone;
         this.address = address;
         this.role = role;
+        this.branch = branch;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
         this.active = active;
@@ -89,7 +91,8 @@ public class User implements UserDetails {
 
         return authorities;
     }
-   @Override
+
+    @Override
     public String getPassword() {
         return password;
     }

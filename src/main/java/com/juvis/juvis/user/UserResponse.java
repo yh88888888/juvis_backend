@@ -1,5 +1,7 @@
 package com.juvis.juvis.user;
 
+import com.juvis.juvis._core.enums.UserRole;
+
 import lombok.Data;
 
 public class UserResponse {
@@ -29,7 +31,9 @@ public class UserResponse {
             this.accessToken = accessToken;
             this.username = user.getUsername();
             this.role = user.getRole().name();
-            this.name = user.getName();
+            if (user.getRole() == UserRole.BRANCH && user.getBranch() != null) {
+                this.name = user.getBranch().getBranchName();
+            }
         }
     }
 

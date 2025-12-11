@@ -4,6 +4,7 @@ import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 
 @RequiredArgsConstructor
@@ -17,16 +18,12 @@ public class BranchRepository {
         return branch;
     }
 
-    public Optional<Branch> findByName(String branchName) {
-        try {
-            Branch branch = em.createQuery(
-                            "select b from Branch b where b.branchName = :name", Branch.class)
-                    .setParameter("name", branchName)
-                    .getSingleResult();
-            return Optional.of(branch);
-        } catch (Exception e) {
-            return Optional.empty();
-        }
+    public Optional<Branch> findByBranchName(String branchName) {
+        List<Branch> result = em.createQuery(
+                "select b from Branch b where b.branchName = :branchName", Branch.class)
+                .setParameter("branchName", branchName)
+                .getResultList();
+
+        return result.stream().findFirst();
     }
 }
-

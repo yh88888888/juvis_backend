@@ -2,6 +2,7 @@ package com.juvis.juvis.maintenance;
 
 import java.util.List;
 
+import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -11,6 +12,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.juvis.juvis._core.enums.MaintenanceCategory;
+import com.juvis.juvis._core.enums.MaintenanceStatus;
 import com.juvis.juvis._core.enums.UserRole;
 import com.juvis.juvis._core.util.Resp;
 import com.juvis.juvis.user.User;
@@ -27,7 +30,7 @@ public class MaintenanceController {
     /**
      * 지점 – 유지보수 요청 생성 (DRAFT 또는 REQUESTED)
      */
-    @PostMapping("/maintenance/requests")
+    @PostMapping("/api/branch/maintenances")
     public ResponseEntity<?> createRequest(
             @AuthenticationPrincipal User currentUser,
             @RequestBody MaintenanceRequest.CreateDTO dto) {
@@ -38,7 +41,7 @@ public class MaintenanceController {
     /**
      * 지점 – DRAFT/REJECTED 상태 요청 제출 (REQUESTED)
      */
-    @PostMapping("/maintenance/requests/{id}/submit")
+    @PostMapping("/api/branch/maintenances/{id}/submit")
     public ResponseEntity<?> submitRequest(
             @AuthenticationPrincipal User currentUser,
             @PathVariable Long id) {
@@ -46,51 +49,61 @@ public class MaintenanceController {
         return Resp.ok(new MaintenanceResponse.DetailDTO(m));
     }
 
-    /**
-     * 지점 – 내가 작성한 요청 목록
+        /**
+     * 지점 – 내 지점의 요청 목록 (상태/카테고리 필터 + 페이징)
      */
-    @GetMapping("/maintenance/requests/my")
-    public ResponseEntity<?> getMyRequests(
-            @AuthenticationPrincipal User currentUser) {
-        List<Maintenance> list = maintenanceService.findMyRequests(currentUser);
-        List<MaintenanceResponse.SimpleDTO> resp = list.stream().map(MaintenanceResponse.SimpleDTO::new).toList();
-        return Resp.ok(resp);
+    @GetMapping("/api/branch/maintenances")
+    public ResponseEntity<Resp<Page<MaintenanceResponse.SimpleDTO>>> getBranchList(
+            @AuthenticationPrincipal User loginUser,
+            @RequestParam(required = false) MaintenanceStatus status,
+            @RequestParam(required = false) MaintenanceCategory category,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+
+        Page<Maintenance> result =
+                maintenanceService.getBranchList(loginUser, status, category, page, size);
+
+        Page<MaintenanceResponse.SimpleDTO> dtoPage = result.map(MaintenanceResponse.SimpleDTO::new);
+        return Resp.ok(dtoPage);
     }
 
     /**
      * 지점 – 특정 요청 상세(내가 쓴 것 또는 내 지점 것만 허용)
      */
-    @GetMapping("/maintenance/requests/{id}")
-    public ResponseEntity<?> getDetailForBranch(
-            @AuthenticationPrincipal User currentUser,
+    @GetMapping("/api/branch/maintenances/{id}")
+    public ResponseEntity<Resp<MaintenanceResponse.DetailDTO>> getDetailForBranch(
+            @AuthenticationPrincipal User loginUser,
             @PathVariable Long id) {
-        Maintenance m = maintenanceService.getDetailForBranch(currentUser, id);
+
+        Maintenance m = maintenanceService.getDetailForBranch(loginUser, id);
         return Resp.ok(new MaintenanceResponse.DetailDTO(m));
     }
+    
 
     // ========================= HQ =========================
-
-    /**
-     * HQ – 전체 요청 목록 조회 (status / branchId 필터링 가능)
-     */
+// HQ – 전체 요청 목록 조회 (status/category/branchId + 페이징)
     @GetMapping("/hq/maintenance/requests")
-    public ResponseEntity<?> getRequestsForHq(
+    public ResponseEntity<Resp<Page<MaintenanceResponse.SimpleDTO>>> getRequestsForHq(
             @AuthenticationPrincipal User currentUser,
-            @RequestParam(required = false) String status,
-            @RequestParam(required = false) String category,
-            @RequestParam(required = false) Long branchId) {
+            @RequestParam(required = false) MaintenanceStatus status,
+            @RequestParam(required = false) MaintenanceCategory category,
+            @RequestParam(required = false) Long branchId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+
         if (currentUser.getRole() != UserRole.HQ) {
             return Resp.forbidden("HQ 권한이 필요합니다.");
         }
 
-        List<Maintenance> list = maintenanceService.findForHq(status, category, branchId);
-        List<MaintenanceResponse.SimpleDTO> resp = list.stream().map(MaintenanceResponse.SimpleDTO::new).toList();
-        return Resp.ok(resp);
+        Page<Maintenance> result = maintenanceService.getHqList(status, category, branchId, page, size);
+        Page<MaintenanceResponse.SimpleDTO> dtoPage = result.map(MaintenanceResponse.SimpleDTO::new);
+        return Resp.ok(dtoPage);
     }
 
     /**
      * HQ – 요청 상세 보기
      */
+
     @GetMapping("/hq/maintenance/requests/{id}")
     public ResponseEntity<?> getDetailForHq(
             @AuthenticationPrincipal User currentUser,
@@ -106,7 +119,8 @@ public class MaintenanceController {
     /**
      * HQ – Vendor 지정 (ESTIMATING으로 변경)
      */
-    @PostMapping("/hq/maintenance/requests/{id}/assign-vendor")
+
+        @PostMapping("/hq/maintenance/requests/{id}/assign-vendor")
     public ResponseEntity<?> assignVendor(
             @AuthenticationPrincipal User currentUser,
             @PathVariable Long id,
@@ -138,6 +152,7 @@ public class MaintenanceController {
     /**
      * HQ – 반려 (REJECTED)
      */
+
     @PostMapping("/hq/maintenance/requests/{id}/reject")
     public ResponseEntity<?> reject(
             @AuthenticationPrincipal User currentUser,
@@ -156,6 +171,8 @@ public class MaintenanceController {
     /**
      * Vendor – 내게 배정된 요청 목록
      */
+
+
     @GetMapping("/vendor/maintenance/requests")
     public ResponseEntity<?> getRequestsForVendor(
             @AuthenticationPrincipal User currentUser,
@@ -172,7 +189,7 @@ public class MaintenanceController {
     /**
      * Vendor – 견적 제출 (ESTIMATING → APPROVAL_PENDING)
      */
-    @PostMapping("/vendor/maintenance/requests/{id}/submit-estimate")
+      @PostMapping("/vendor/maintenance/requests/{id}/submit-estimate")
     public ResponseEntity<?> submitEstimate(
             @AuthenticationPrincipal User currentUser,
             @PathVariable Long id,

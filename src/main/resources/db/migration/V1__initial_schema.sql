@@ -66,6 +66,7 @@ CREATE TABLE user_tb (
 CREATE TABLE maintenance_request (
   request_id     BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   branch_id      BIGINT UNSIGNED NOT NULL,
+  branch_seq      INT NOT NULL,
   requester_id   BIGINT UNSIGNED NOT NULL,
   title          VARCHAR(200)    NOT NULL,
   description    TEXT,
@@ -104,6 +105,8 @@ CREATE TABLE maintenance_request (
   updated_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
   PRIMARY KEY (request_id),
+  UNIQUE KEY uk_branch_seq (branch_id, branch_seq)
+
   KEY idx_mr_branch (branch_id),
   KEY idx_mr_status (status),
   KEY idx_mr_category (category),
@@ -114,6 +117,7 @@ CREATE TABLE maintenance_request (
   CONSTRAINT fk_mr_branch
     FOREIGN KEY (branch_id) REFERENCES branch(branch_id)
     ON UPDATE RESTRICT ON DELETE RESTRICT,
+  CONSTRAINT uk_maintenance_branch_seq
   CONSTRAINT fk_mr_requester
     FOREIGN KEY (requester_id) REFERENCES user_tb(user_id)
     ON UPDATE RESTRICT ON DELETE RESTRICT,
