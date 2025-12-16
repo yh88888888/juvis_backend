@@ -27,7 +27,6 @@ public class MaintenanceResponse {
 
         public SimpleDTO(Maintenance m) {
             this.id = m.getId();
-            this.branchSeq = m.getBranchSeq();
             this.branchName = m.getBranch() != null ? m.getBranch().getBranchName() : null;
             this.requesterName = m.getRequester() != null ? m.getRequester().getName() : null;
             this.title = m.getTitle();

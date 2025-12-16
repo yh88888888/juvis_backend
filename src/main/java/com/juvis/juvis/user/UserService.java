@@ -29,13 +29,19 @@ public class UserService {
         User userPS = userRepository.findByUsername(loginDTO.getUsername())
                 .orElseThrow(() -> new ExceptionApi401("유저네임 혹은 비밀번호가 틀렸습니다"));
 
+        System.out.println("raw=" + loginDTO.getPassword());
+        System.out.println("db=" + userPS.getPassword());
+        System.out.println("match=" + bCryptPasswordEncoder.matches(loginDTO.getPassword(), userPS.getPassword()));
+
         boolean isSame = bCryptPasswordEncoder.matches(loginDTO.getPassword(), userPS.getPassword());
         if (!isSame)
             throw new ExceptionApi401("유저네임 혹은 비밀번호가 틀렸습니다");
 
-        String accessToken = JwtUtil.create(userPS);
+        String accessToken = JwtUtil.createAccessToken(userPS);
 
-        return new UserResponse.LoginDTO(accessToken, userPS);
+        String refreshToken = JwtUtil.createRefreshToken(userPS);
+
+        return new UserResponse.LoginDTO(accessToken, refreshToken, userPS);
     }
 
     @Transactional

@@ -15,14 +15,7 @@ import java.time.LocalDateTime;
 
 @Entity
 @Table(
-    name = "maintenance_request",
-    uniqueConstraints = {
-        @UniqueConstraint(
-            name = "uk_maintenance_branch_seq",
-            columnNames = { "branch_id", "branch_seq" }
-        )
-    }
-)
+    name = "maintenance_request")
 @Getter
 @Setter
 @NoArgsConstructor
@@ -35,18 +28,11 @@ public class Maintenance {
     @Column(name = "request_id")
     private Long id;
 
-    /* =======================
-       관계
-       ======================= */
-
     // 지점
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "branch_id", nullable = false)
     private Branch branch;
  
-
-    @Column(name = "branch_seq", nullable = false)
-    private Integer branchSeq;
 
     // 요청자 (지점 사용자)
     @ManyToOne(fetch = FetchType.LAZY)

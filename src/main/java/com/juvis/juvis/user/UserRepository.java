@@ -13,6 +13,10 @@ import lombok.RequiredArgsConstructor;
 public class UserRepository {
     private final EntityManager em;
 
+    public Optional<User> findById(Integer id) {
+        return Optional.ofNullable(em.find(User.class, id));
+    }
+
     public Optional<User> findByName(String name) {
         try {
             User userPS = em.createQuery("select u from User u where u.name = :name", User.class)

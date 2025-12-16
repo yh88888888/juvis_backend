@@ -47,6 +47,7 @@ CREATE TABLE user_tb (
   password   VARCHAR(255) NOT NULL,               -- 비밀번호(해시)
   name       VARCHAR(100) NULL,                   -- 사용자 이름
   phone      VARCHAR(20)  NULL,                   -- 사용자 개인 휴대폰 번호
+  address    VARCHAR(255) NULL,
   role      ENUM('BRANCH','HQ','VENDOR') NOT NULL DEFAULT 'BRANCH',
   is_active  BOOLEAN NOT NULL DEFAULT TRUE,       -- 활성/비활성
   branch_id  BIGINT UNSIGNED NULL,                -- BRANCH일 경우 지점 FK
@@ -66,7 +67,6 @@ CREATE TABLE user_tb (
 CREATE TABLE maintenance_request (
   request_id     BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   branch_id      BIGINT UNSIGNED NOT NULL,
-  branch_seq      INT NOT NULL,
   requester_id   BIGINT UNSIGNED NOT NULL,
   title          VARCHAR(200)    NOT NULL,
   description    TEXT,
@@ -83,8 +83,8 @@ CREATE TABLE maintenance_request (
     'HVAC',
     'WATER_SUPPLY_DRAINAGE',
     'SAFETY_HYGIENE',
-    'ETC';
-    ) NOT NULL DEFAULT 'DRAFT',
+    'ETC'
+    ) NOT NULL DEFAULT 'ETC',
 
   vendor_id      BIGINT UNSIGNED NULL,
 
@@ -94,6 +94,10 @@ CREATE TABLE maintenance_request (
   work_start_date      DATE         NULL,
   work_end_date        DATE         NULL,
   rejected_reason      VARCHAR(500) NULL,
+
+  result_comment TEXT NULL,
+  result_photo_url VARCHAR(2048) NULL,
+  work_completed_at DATETIME NULL,
 
   -- 타임스탬프
   submitted_at         DATETIME NULL, -- 지점이 정식 제출한 시점
@@ -105,7 +109,6 @@ CREATE TABLE maintenance_request (
   updated_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
   PRIMARY KEY (request_id),
-  UNIQUE KEY uk_branch_seq (branch_id, branch_seq)
 
   KEY idx_mr_branch (branch_id),
   KEY idx_mr_status (status),
@@ -114,19 +117,21 @@ CREATE TABLE maintenance_request (
   KEY idx_mr_requester (requester_id),
   KEY idx_mr_created (created_at),
 
-  CONSTRAINT fk_mr_branch
-    FOREIGN KEY (branch_id) REFERENCES branch(branch_id)
-    ON UPDATE RESTRICT ON DELETE RESTRICT,
-  CONSTRAINT uk_maintenance_branch_seq
-  CONSTRAINT fk_mr_requester
-    FOREIGN KEY (requester_id) REFERENCES user_tb(user_id)
-    ON UPDATE RESTRICT ON DELETE RESTRICT,
-  CONSTRAINT fk_mr_vendor
-    FOREIGN KEY (vendor_id) REFERENCES user_tb(user_id)
-    ON UPDATE RESTRICT ON DELETE SET NULL,
-  CONSTRAINT fk_mr_approved_by
-    FOREIGN KEY (approved_by) REFERENCES user_tb(user_id)
-    ON UPDATE RESTRICT ON DELETE SET NULL
+ CONSTRAINT fk_mr_branch
+  FOREIGN KEY (branch_id) REFERENCES branch(branch_id)
+  ON UPDATE RESTRICT ON DELETE RESTRICT,
+
+CONSTRAINT fk_mr_requester
+  FOREIGN KEY (requester_id) REFERENCES user_tb(user_id)
+  ON UPDATE RESTRICT ON DELETE RESTRICT,
+
+CONSTRAINT fk_mr_vendor
+  FOREIGN KEY (vendor_id) REFERENCES user_tb(user_id)
+  ON UPDATE RESTRICT ON DELETE SET NULL,
+
+CONSTRAINT fk_mr_approved_by
+  FOREIGN KEY (approved_by) REFERENCES user_tb(user_id)
+  ON UPDATE RESTRICT ON DELETE SET NULL
 ) ENGINE=InnoDB;
 
 
