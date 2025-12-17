@@ -21,7 +21,6 @@ import com.juvis.juvis._core.enums.MaintenanceStatus;
 import com.juvis.juvis._core.enums.UserRole;
 import com.juvis.juvis._core.util.Resp;
 import com.juvis.juvis.user.LoginUser;
-import com.juvis.juvis.user.User;
 
 import lombok.RequiredArgsConstructor;
 
@@ -47,9 +46,9 @@ public class MaintenanceController {
      * 지점 – DRAFT/REJECTED 상태 요청 제출 (REQUESTED)
      */
     @PostMapping("/api/branch/maintenances/{id}/submit")
-    public ResponseEntity<?> submitRequest(
-            @AuthenticationPrincipal LoginUser loginUser,
-            @PathVariable Long id) {
+public ResponseEntity<?> submitRequest(
+        @AuthenticationPrincipal LoginUser loginUser,
+        @PathVariable("id") Long id) {
         Maintenance m = maintenanceService.submitRequest(loginUser, id);
         return Resp.ok(new MaintenanceResponse.DetailDTO(m));
     }

@@ -1,10 +1,12 @@
 package com.juvis.juvis.maintenance;
 
+import lombok.Data;
 import lombok.Getter;
 import lombok.Setter;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 
 import com.juvis.juvis._core.enums.MaintenanceCategory;
 
@@ -12,12 +14,21 @@ public class MaintenanceRequest {
 
     @Getter
     @Setter
+    @Data
     public static class CreateDTO {
         private String title;
         private String description;
         private MaintenanceCategory category;
-        private boolean submit; // true면 바로 REQUESTED, false면 DRAFT
+        private boolean submit;
 
+        // 👇 이걸로 간다
+        private List<PhotoDTO> photos;
+    }
+
+    @Data
+    public static class PhotoDTO {
+        private String fileKey;
+        private String url;
     }
 
     @Getter

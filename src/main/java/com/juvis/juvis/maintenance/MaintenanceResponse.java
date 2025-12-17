@@ -15,8 +15,7 @@ public class MaintenanceResponse {
     @AllArgsConstructor
     public static class SimpleDTO {
         private Long id;
-        private Integer branchSeq; 
-        private String branchName;
+         private String branchName;
         private String requesterName;
 
         private String title;

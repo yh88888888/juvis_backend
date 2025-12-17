@@ -1,10 +1,11 @@
 package com.juvis.juvis._core.config;
 
 import com.juvis.juvis.storage.StorageProps;
-import org.springframework.context.annotation.Configuration;
-import org.springframework.boot.context.properties.EnableConfigurationProperties;
-import org.springframework.context.annotation.Bean;
 
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
+
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 

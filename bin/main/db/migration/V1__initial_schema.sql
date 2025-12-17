@@ -70,21 +70,25 @@ CREATE TABLE maintenance_request (
   requester_id   BIGINT UNSIGNED NOT NULL,
   title          VARCHAR(200)    NOT NULL,
   description    TEXT,
-  status         ENUM('DRAFT','REQUESTED',          -- 지점이 요청 제출
+
+  status         ENUM(
+    'DRAFT',
+    'REQUESTED',          -- 지점이 요청 제출
     'ESTIMATING',         -- HQ가 vendor에게 견적 요청
     'APPROVAL_PENDING',   -- vendor가 견적 제출 → HQ 승인 대기
     'IN_PROGRESS',        -- 승인 후 공사 진행 중
     'COMPLETED',          -- 공사 완료
     'REJECTED'            -- HQ가 반려
-    ) NOT NULL DEFAULT 'DRAFT',
+  ) NOT NULL DEFAULT 'DRAFT',
 
-  category       ENUM('ELECTRICAL_COMMUNICATION',
+  category       ENUM(
+    'ELECTRICAL_COMMUNICATION',
     'LIGHTING',
     'HVAC',
     'WATER_SUPPLY_DRAINAGE',
     'SAFETY_HYGIENE',
     'ETC'
-    ) NOT NULL DEFAULT 'ETC',
+  ) NOT NULL DEFAULT 'ETC',
 
   vendor_id      BIGINT UNSIGNED NULL,
 
@@ -95,9 +99,9 @@ CREATE TABLE maintenance_request (
   work_end_date        DATE         NULL,
   rejected_reason      VARCHAR(500) NULL,
 
-  result_comment TEXT NULL,
-  result_photo_url VARCHAR(2048) NULL,
-  work_completed_at DATETIME NULL,
+  result_comment     TEXT NULL,
+  result_photo_url   VARCHAR(2048) NULL,
+  work_completed_at  DATETIME NULL,
 
   -- 타임스탬프
   submitted_at         DATETIME NULL, -- 지점이 정식 제출한 시점
@@ -117,22 +121,23 @@ CREATE TABLE maintenance_request (
   KEY idx_mr_requester (requester_id),
   KEY idx_mr_created (created_at),
 
- CONSTRAINT fk_mr_branch
-  FOREIGN KEY (branch_id) REFERENCES branch(branch_id)
-  ON UPDATE RESTRICT ON DELETE RESTRICT,
+  CONSTRAINT fk_mr_branch
+    FOREIGN KEY (branch_id) REFERENCES branch(branch_id)
+    ON UPDATE RESTRICT ON DELETE RESTRICT,
 
-CONSTRAINT fk_mr_requester
-  FOREIGN KEY (requester_id) REFERENCES user_tb(user_id)
-  ON UPDATE RESTRICT ON DELETE RESTRICT,
+  CONSTRAINT fk_mr_requester
+    FOREIGN KEY (requester_id) REFERENCES user_tb(user_id)
+    ON UPDATE RESTRICT ON DELETE RESTRICT,
 
-CONSTRAINT fk_mr_vendor
-  FOREIGN KEY (vendor_id) REFERENCES user_tb(user_id)
-  ON UPDATE RESTRICT ON DELETE SET NULL,
+  CONSTRAINT fk_mr_vendor
+    FOREIGN KEY (vendor_id) REFERENCES user_tb(user_id)
+    ON UPDATE RESTRICT ON DELETE SET NULL,
 
-CONSTRAINT fk_mr_approved_by
-  FOREIGN KEY (approved_by) REFERENCES user_tb(user_id)
-  ON UPDATE RESTRICT ON DELETE SET NULL
+  CONSTRAINT fk_mr_approved_by
+    FOREIGN KEY (approved_by) REFERENCES user_tb(user_id)
+    ON UPDATE RESTRICT ON DELETE SET NULL
 ) ENGINE=InnoDB;
+
 
 
 -- 4) estimate
@@ -180,29 +185,16 @@ CREATE TABLE work_order (
     ON UPDATE RESTRICT ON DELETE RESTRICT
 ) ENGINE=InnoDB;
 
--- 6) file_attachment
-CREATE TABLE file_attachment (
-  file_id      BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-  request_id   BIGINT UNSIGNED NOT NULL,
-  work_id      BIGINT UNSIGNED NULL,
-  file_path    VARCHAR(255)    NOT NULL,
-  file_type    ENUM('PHOTO','ESTIMATE','REPORT') NOT NULL,
-  uploaded_by  BIGINT UNSIGNED NOT NULL,
-  uploaded_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (file_id),
-  KEY idx_fa_req (request_id),
-  KEY idx_fa_work (work_id),
-  KEY idx_fa_uploader (uploaded_by),
-  CONSTRAINT fk_fa_req
-    FOREIGN KEY (request_id) REFERENCES maintenance_request(request_id)
-    ON UPDATE RESTRICT ON DELETE CASCADE,
-  CONSTRAINT fk_fa_work
-    FOREIGN KEY (work_id) REFERENCES work_order(work_id)
-    ON UPDATE RESTRICT ON DELETE SET NULL,
-  CONSTRAINT fk_fa_uploader
-    FOREIGN KEY (uploaded_by) REFERENCES user_tb(user_id)
-    ON UPDATE RESTRICT ON DELETE RESTRICT
-) ENGINE=InnoDB;
+-- 6) Photo attachment
+create table maintenance_photo (
+  id bigint unsigned auto_increment primary key,
+  maintenance_id bigint unsigned not null,
+  file_key varchar(255) not null,
+  url varchar(500) not null,
+  constraint fk_maintenance_photo_maintenance
+    foreign key (maintenance_id)
+    references maintenance_request (request_id)
+) engine=InnoDB;
 
 -- 7) comment
 CREATE TABLE comment (

@@ -2,6 +2,7 @@ package com.juvis.juvis.maintenance;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -15,6 +16,8 @@ import com.juvis.juvis._core.error.ex.ExceptionApi400;
 import com.juvis.juvis._core.error.ex.ExceptionApi401;
 import com.juvis.juvis._core.error.ex.ExceptionApi403;
 import com.juvis.juvis.branch.Branch;
+import com.juvis.juvis.maintenance_photo.MaintenancePhoto;
+import com.juvis.juvis.maintenance_photo.MaintenancePhotoRepository;
 import com.juvis.juvis.user.LoginUser;
 import com.juvis.juvis.user.User;
 import com.juvis.juvis.user.UserRepository;
@@ -28,6 +31,7 @@ public class MaintenanceService {
 
     private final MaintenanceRepository maintenanceRepository;
     private final UserRepository userRepository;
+    private final MaintenancePhotoRepository maintenancePhotoRepository;
 
     // ---------- 공통 로더 ----------
     private User loadUser(LoginUser loginUser) {
@@ -52,28 +56,32 @@ public class MaintenanceService {
         }
 
         User currentUser = loadUser(loginUser);
-
         Branch branch = currentUser.getBranch();
+
         if (branch == null) {
             throw new ExceptionApi400("지점 정보가 없습니다.");
         }
 
-        MaintenanceStatus status = dto.isSubmit() ? MaintenanceStatus.REQUESTED : MaintenanceStatus.DRAFT;
-        LocalDateTime submittedAt = dto.isSubmit() ? LocalDateTime.now() : null;
-
-        Maintenance mr = Maintenance.builder()
-                .branch(branch)
-                .requester(currentUser)
-                .title(dto.getTitle())
-                .description(dto.getDescription())
-                .status(status)
-                .category(dto.getCategory())
-                .submittedAt(submittedAt)
-                .build();
+        Maintenance mr = dto.isSubmit()
+                ? Maintenance.createSubmitted(branch, currentUser, dto)
+                : Maintenance.createDraft(branch, currentUser, dto);
 
         Maintenance saved = maintenanceRepository.save(mr);
 
-        // ✅ 핵심: LAZY 연관 객체를 트랜잭션 안에서 초기화
+        // ✅ 여기서부터가 핵심
+        List<MaintenanceRequest.PhotoDTO> photos = dto.getPhotos();
+        if (photos != null && !photos.isEmpty()) {
+            List<MaintenancePhoto> entities = photos.stream()
+                    .map(p -> MaintenancePhoto.of(
+                            saved,
+                            p.getFileKey(),
+                            p.getUrl()))
+                    .collect(Collectors.toList());
+
+            maintenancePhotoRepository.saveAll(entities);
+        }
+
+        // LAZY 초기화
         saved.getBranch().getBranchName();
 
         return saved;
