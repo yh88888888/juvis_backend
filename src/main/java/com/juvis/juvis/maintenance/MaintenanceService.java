@@ -21,9 +21,11 @@ import com.juvis.juvis.maintenance_photo.MaintenancePhotoRepository;
 import com.juvis.juvis.user.LoginUser;
 import com.juvis.juvis.user.User;
 import com.juvis.juvis.user.UserRepository;
+import lombok.extern.slf4j.Slf4j;
 
 import lombok.RequiredArgsConstructor;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -68,6 +70,13 @@ public class MaintenanceService {
 
         Maintenance saved = maintenanceRepository.save(mr);
 
+        // log.info(
+        //         "CREATE saved id={}, status={}, submit={}, requesterId={}",
+        //         saved.getId(),
+        //         saved.getStatus(),
+        //         dto.isSubmit(),
+        //         saved.getRequester() != null ? saved.getRequester().getId() : null);
+
         // ✅ 여기서부터가 핵심
         List<MaintenanceRequest.PhotoDTO> photos = dto.getPhotos();
         if (photos != null && !photos.isEmpty()) {
@@ -77,7 +86,6 @@ public class MaintenanceService {
                             p.getFileKey(),
                             p.getUrl()))
                     .collect(Collectors.toList());
-
             maintenancePhotoRepository.saveAll(entities);
         }
 
@@ -88,13 +96,16 @@ public class MaintenanceService {
     }
 
     @Transactional
-    public Maintenance submitRequest(LoginUser loginUser, Long requestId) {
+    public MaintenanceResponse.DetailDTO submitRequest(LoginUser loginUser, Long requestId) {
 
         if (loginUser.role() != UserRole.BRANCH) {
             throw new ExceptionApi403("지점만 제출할 수 있습니다.");
         }
 
+        // log.info("submitRequest requestId={}, loginUserId={}", requestId, loginUser.id());
         Maintenance mr = findByIdOrThrow(requestId);
+        // log.info("submit target status={}, requesterId={}", mr.getStatus(),
+        //         mr.getRequester() != null ? mr.getRequester().getId() : null);
 
         // 지점은 보통 지점 소속이면 제출 가능하게 해도 되지만,
         // 너가 기존에 "본인 작성만" 정책을 쓰고 있어서 그대로 유지
@@ -108,7 +119,11 @@ public class MaintenanceService {
 
         mr.setStatus(MaintenanceStatus.REQUESTED);
         mr.setSubmittedAt(LocalDateTime.now());
-        return mr;
+
+        // ✅ 여기 추가
+        mr.getBranch().getBranchName();
+
+        return new MaintenanceResponse.DetailDTO(mr);
     }
 
     public Page<Maintenance> getBranchList(

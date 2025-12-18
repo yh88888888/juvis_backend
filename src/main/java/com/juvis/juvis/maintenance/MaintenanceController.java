@@ -49,8 +49,8 @@ public class MaintenanceController {
 public ResponseEntity<?> submitRequest(
         @AuthenticationPrincipal LoginUser loginUser,
         @PathVariable("id") Long id) {
-        Maintenance m = maintenanceService.submitRequest(loginUser, id);
-        return Resp.ok(new MaintenanceResponse.DetailDTO(m));
+        MaintenanceResponse.DetailDTO dto = maintenanceService.submitRequest(loginUser, id);
+        return Resp.ok(dto);
     }
 
     @GetMapping("/api/branch/maintenances")
