@@ -66,6 +66,8 @@ public class MaintenanceResponse {
         private LocalDate workStartDate;
         private LocalDate workEndDate;
 
+        private Integer estimateResubmitCount;
+
         // 결과
         private String resultComment;
         private String resultPhotoUrl;
@@ -106,6 +108,8 @@ public class MaintenanceResponse {
             this.estimateComment = m.getEstimateComment();
             this.workStartDate = m.getWorkStartDate();
             this.workEndDate = m.getWorkEndDate();
+
+            this.estimateResubmitCount = m.getEstimateResubmitCount();
 
             this.resultComment = m.getResultComment();
             this.resultPhotoUrl = m.getResultPhotoUrl();

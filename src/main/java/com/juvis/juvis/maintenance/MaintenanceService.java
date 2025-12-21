@@ -116,7 +116,7 @@ public class MaintenanceService {
             throw new ExceptionApi403("본인 작성 요청만 제출할 수 있습니다.");
         }
 
-        if (mr.getStatus() != MaintenanceStatus.DRAFT && mr.getStatus() != MaintenanceStatus.REJECTED) {
+        if (mr.getStatus() != MaintenanceStatus.DRAFT && mr.getStatus() != MaintenanceStatus.HQ1_REJECTED) {
             throw new ExceptionApi400("제출할 수 없는 상태입니다.");
         }
 
@@ -163,7 +163,7 @@ public class MaintenanceService {
 
         Maintenance mr = findByIdOrThrow(id);
 
-                // 지점 소속이면 열람 가능
+        // 지점 소속이면 열람 가능
         if (mr.getBranch() == null || !mr.getBranch().getId().equals(branch.getId())) {
             throw new ExceptionApi403("열람 권한이 없습니다.");
         }
@@ -212,21 +212,51 @@ public class MaintenanceService {
         return findByIdOrThrow(id);
     }
 
-    // TODO 구현부들은 정책 확정되면 채우기
     @Transactional
     public Maintenance assignVendor(LoginUser loginUser, Long id, MaintenanceRequest.AssignVendorDTO dto) {
         if (loginUser == null || loginUser.role() != UserRole.HQ) {
             throw new ExceptionApi403("HQ 권한이 필요합니다.");
         }
-        return null;
-    }
-
-    @Transactional
-    public Maintenance approve(LoginUser loginUser, Long id, MaintenanceRequest.ApproveDTO dto) {
-        if (loginUser == null || loginUser.role() != UserRole.HQ) {
-            throw new ExceptionApi403("HQ 권한이 필요합니다.");
+        if (dto == null || dto.getVendorUserId() == null) {
+            throw new ExceptionApi400("vendorUserId가 필요합니다.");
         }
-        return null;
+
+        Maintenance mr = findByIdOrThrow(id);
+
+        // ✅ HQ 1차 액션은 REQUESTED에서만
+        if (mr.getStatus() != MaintenanceStatus.REQUESTED) {
+            throw new ExceptionApi400("Vendor 지정은 REQUESTED 상태에서만 가능합니다.");
+        }
+
+        Long vendorUserId = dto.getVendorUserId();
+
+// Long -> Integer 변환 (범위 체크)
+if (vendorUserId > Integer.MAX_VALUE) {
+    throw new ExceptionApi400("vendorUserId 범위가 올바르지 않습니다.");
+}
+Integer vendorIdInt = vendorUserId.intValue();
+
+User vendor = userRepository.findById(vendorIdInt)
+        .orElseThrow(() -> new ExceptionApi400("벤더 사용자를 찾을 수 없습니다. id=" + vendorUserId));
+
+        if (vendor.getRole() != UserRole.VENDOR) {
+            throw new ExceptionApi400("지정한 사용자가 VENDOR가 아닙니다.");
+        }
+
+        mr.setVendor(vendor);
+
+        // ✅ HQ 1차 승인 처리: 승인자/승인일 기록(기존 필드 재사용)
+        User hqUser = loadUser(loginUser);
+        mr.setApprovedBy(hqUser);
+        mr.setApprovedAt(LocalDateTime.now());
+
+        // ✅ 다음 단계로
+        mr.setStatus(MaintenanceStatus.ESTIMATING);
+
+        // 1차 승인 이후 반려사유는 비워두는게 안전
+        mr.setRejectedReason(null);
+
+        return mr;
     }
 
     @Transactional
@@ -234,40 +264,167 @@ public class MaintenanceService {
         if (loginUser == null || loginUser.role() != UserRole.HQ) {
             throw new ExceptionApi403("HQ 권한이 필요합니다.");
         }
-        return null;
+        if (dto == null || dto.getReason() == null || dto.getReason().isBlank()) {
+            throw new ExceptionApi400("반려 사유(reason)가 필요합니다.");
+        }
+
+        Maintenance mr = findByIdOrThrow(id);
+        User hqUser = loadUser(loginUser);
+
+        // ✅ 1차 반려: REQUESTED에서 반려하면 지점으로 돌아감
+        if (mr.getStatus() == MaintenanceStatus.REQUESTED) {
+            mr.setStatus(MaintenanceStatus.HQ1_REJECTED);
+            mr.setRejectedReason(dto.getReason());
+
+            mr.setApprovedBy(hqUser); // 누가 반려했는지 흔적
+            mr.setApprovedAt(LocalDateTime.now()); // 기존 approvedAt 재사용(결정 시각)
+            return mr;
+        }
+
+        // ✅ 2차 반려: APPROVAL_PENDING에서 반려하면 벤더 재제출(1회) 가능 상태
+        if (mr.getStatus() == MaintenanceStatus.APPROVAL_PENDING) {
+            mr.setStatus(MaintenanceStatus.HQ2_REJECTED);
+            mr.setRejectedReason(dto.getReason());
+
+            mr.setApprovedBy(hqUser);
+            mr.setApprovedAt(LocalDateTime.now());
+            return mr;
+        }
+
+        throw new ExceptionApi400("현재 상태에서는 반려할 수 없습니다. status=" + mr.getStatus());
+    }
+
+    @Transactional
+    public Maintenance approve(LoginUser loginUser, Long id, MaintenanceRequest.ApproveDTO dto) {
+        if (loginUser == null || loginUser.role() != UserRole.HQ) {
+            throw new ExceptionApi403("HQ 권한이 필요합니다.");
+        }
+
+        Maintenance mr = findByIdOrThrow(id);
+
+        // ✅ HQ 승인(2차)은 벤더가 견적 제출한 후에만
+        if (mr.getStatus() != MaintenanceStatus.APPROVAL_PENDING) {
+            throw new ExceptionApi400("승인은 APPROVAL_PENDING 상태에서만 가능합니다.");
+        }
+
+        User hqUser = loadUser(loginUser);
+
+        mr.setStatus(MaintenanceStatus.IN_PROGRESS);
+        mr.setApprovedBy(hqUser);
+        mr.setApprovedAt(LocalDateTime.now());
+        mr.setRejectedReason(null); // 승인했으니 반려사유 초기화
+
+        return mr;
     }
 
     // ========================= VENDOR =========================
 
     public List<Maintenance> findForVendor(LoginUser loginUser, String status) {
+    if (loginUser == null || loginUser.role() != UserRole.VENDOR) {
+        throw new ExceptionApi403("VENDOR 권한이 필요합니다.");
+    }
 
-        if (loginUser == null || loginUser.role() != UserRole.VENDOR) {
-            throw new ExceptionApi403("VENDOR 권한이 필요합니다.");
-        }
+    User vendor = loadUser(loginUser);
 
-        User vendor = loadUser(loginUser);
-
-        if (status != null && !status.isBlank()) {
-            MaintenanceStatus s = MaintenanceStatus.valueOf(status.trim().toUpperCase());
-            return maintenanceRepository.findByVendorAndStatus(vendor, s);
-        }
-
+    // status 없으면 전체
+    if (status == null || status.isBlank()) {
         return maintenanceRepository.findByVendor(vendor);
     }
+
+    MaintenanceStatus s;
+    try {
+        s = MaintenanceStatus.valueOf(status.trim().toUpperCase());
+    } catch (IllegalArgumentException e) {
+        throw new ExceptionApi400("잘못된 status 값입니다: " + status);
+    }
+
+    // ✅ Vendor가 볼 수 있는 상태만 허용
+    if (s != MaintenanceStatus.ESTIMATING &&
+        s != MaintenanceStatus.HQ2_REJECTED &&
+        s != MaintenanceStatus.IN_PROGRESS &&
+        s != MaintenanceStatus.COMPLETED &&
+        s != MaintenanceStatus.APPROVAL_PENDING // (필요시) 제출 후 대기까지 Vendor 화면에 보이게 할지 결정
+    ) {
+        throw new ExceptionApi403("해당 상태는 Vendor 조회 대상이 아닙니다.");
+    }
+
+    return maintenanceRepository.findByVendorAndStatus(vendor, s);
+}
+
 
     @Transactional
     public Maintenance submitEstimate(LoginUser loginUser, Long id, MaintenanceRequest.SubmitEstimateDTO dto) {
         if (loginUser == null || loginUser.role() != UserRole.VENDOR) {
             throw new ExceptionApi403("VENDOR 권한이 필요합니다.");
         }
-        return null;
+        if (dto == null) {
+            throw new ExceptionApi400("요청 바디가 필요합니다.");
+        }
+
+        User vendor = loadUser(loginUser);
+        Maintenance mr = findByIdOrThrow(id);
+
+        // ✅ 내게 배정된 건만
+        if (mr.getVendor() == null || !mr.getVendor().getId().equals(vendor.getId())) {
+            throw new ExceptionApi403("해당 요청에 대한 벤더 권한이 없습니다.");
+        }
+
+        // ✅ 최초 제출: ESTIMATING
+        // ✅ 재제출: HQ2_REJECTED (단 1회)
+        if (mr.getStatus() == MaintenanceStatus.ESTIMATING) {
+            // ok
+        } else if (mr.getStatus() == MaintenanceStatus.HQ2_REJECTED) {
+            if (mr.getEstimateResubmitCount() >= 1) {
+                throw new ExceptionApi400("견적 재제출은 1회만 가능합니다.");
+            }
+            mr.setEstimateResubmitCount(mr.getEstimateResubmitCount() + 1);
+        } else {
+            throw new ExceptionApi400("견적 제출이 불가능한 상태입니다. status=" + mr.getStatus());
+        }
+
+        // ✅ 견적/일정 업데이트
+        mr.setEstimateAmount(dto.getEstimateAmount());
+        mr.setEstimateComment(dto.getEstimateComment());
+        mr.setWorkStartDate(dto.getWorkStartDate());
+        mr.setWorkEndDate(dto.getWorkEndDate());
+
+        mr.setVendorSubmittedAt(LocalDateTime.now());
+        mr.setStatus(MaintenanceStatus.APPROVAL_PENDING);
+
+        // 제출했으니 기존 반려사유는 지우는게 안전
+        mr.setRejectedReason(null);
+
+        return mr;
     }
 
     @Transactional
-    public Maintenance completeWork(LoginUser loginUser, Long id, MaintenanceRequest.CompleteWorkDTO dto) {
-        if (loginUser == null || loginUser.role() != UserRole.VENDOR) {
-            throw new ExceptionApi403("VENDOR 권한이 필요합니다.");
-        }
-        return null;
+public Maintenance completeWork(LoginUser loginUser, Long id, MaintenanceRequest.CompleteWorkDTO dto) {
+    if (loginUser == null || loginUser.role() != UserRole.VENDOR) {
+        throw new ExceptionApi403("VENDOR 권한이 필요합니다.");
     }
+    if (dto == null) {
+        throw new ExceptionApi400("요청 바디가 필요합니다.");
+    }
+
+    User vendor = loadUser(loginUser);
+    Maintenance mr = findByIdOrThrow(id);
+
+    if (mr.getVendor() == null || !mr.getVendor().getId().equals(vendor.getId())) {
+        throw new ExceptionApi403("해당 요청에 대한 벤더 권한이 없습니다.");
+    }
+
+    if (mr.getStatus() != MaintenanceStatus.IN_PROGRESS) {
+        throw new ExceptionApi400("작업 완료 제출은 IN_PROGRESS 상태에서만 가능합니다.");
+    }
+
+    mr.setResultComment(dto.getResultComment());
+    mr.setResultPhotoUrl(dto.getResultPhotoUrl());
+
+    // dto의 actualEndDate(LocalDate) 대신 엔티티는 LocalDateTime workCompletedAt이므로 now로 처리(최소 변경)
+    mr.setWorkCompletedAt(LocalDateTime.now());
+
+    mr.setStatus(MaintenanceStatus.COMPLETED);
+
+    return mr;
+}
 }

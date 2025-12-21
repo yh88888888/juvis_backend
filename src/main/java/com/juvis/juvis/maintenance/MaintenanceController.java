@@ -113,7 +113,7 @@ public class MaintenanceController {
     }
 
     /**
-     * HQ – Vendor 지정 (ESTIMATING으로 변경)
+     * HQ 1차 승인 + Vendor 지정 + ESTIMATING
      */
 
     @PostMapping("/hq/maintenance/requests/{id}/assign-vendor")
@@ -130,7 +130,7 @@ public class MaintenanceController {
     }
 
     /**
-     * HQ – 승인 (APPROVAL_PENDING → IN_PROGRESS)
+     * “HQ 2차 승인(견적 승인): APPROVAL_PENDING → IN_PROGRESS”
      */
     @PostMapping("/hq/maintenance/requests/{id}/approve")
     public ResponseEntity<?> approve(
@@ -146,7 +146,7 @@ public class MaintenanceController {
     }
 
     /**
-     * HQ – 반려 (REJECTED)
+     * 상태에 따라 HQ1_REJECTED 또는 HQ2_REJECTED
      */
 
     @PostMapping("/hq/maintenance/requests/{id}/reject")

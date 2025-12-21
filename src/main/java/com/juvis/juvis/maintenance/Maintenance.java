@@ -94,6 +94,9 @@ public class Maintenance {
    @Column(name = "work_end_date")
    private LocalDate workEndDate;
 
+   @Column(name = "estimate_resubmit_count", nullable = false)
+   private int estimateResubmitCount; // default 0
+
    /*
     * =======================
     * 작업 결과 (✅ 추가된 핵심)
@@ -150,6 +153,7 @@ public class Maintenance {
             .description(dto.getDescription())
             .category(dto.getCategory())
             .status(MaintenanceStatus.DRAFT) // ✅ 여기서 저장됨
+            .estimateResubmitCount(0) // ✅ 추가
             .submittedAt(null)
             .build();
    }
@@ -163,6 +167,7 @@ public class Maintenance {
             .category(dto.getCategory())
             .status(MaintenanceStatus.REQUESTED) // ✅ 여기서 저장됨
             .submittedAt(LocalDateTime.now()) // ✅ 제출 시점 저장
+            .estimateResubmitCount(0)
             .build();
    }
 }

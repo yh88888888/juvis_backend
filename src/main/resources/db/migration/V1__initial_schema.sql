@@ -68,17 +68,19 @@ CREATE TABLE maintenance_request (
   request_id     BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   branch_id      BIGINT UNSIGNED NOT NULL,
   requester_id   BIGINT UNSIGNED NOT NULL,
+
   title          VARCHAR(200)    NOT NULL,
   description    TEXT,
 
   status         ENUM(
     'DRAFT',
-    'REQUESTED',          -- 지점이 요청 제출
-    'ESTIMATING',         -- HQ가 vendor에게 견적 요청
-    'APPROVAL_PENDING',   -- vendor가 견적 제출 → HQ 승인 대기
-    'IN_PROGRESS',        -- 승인 후 공사 진행 중
-    'COMPLETED',          -- 공사 완료
-    'REJECTED'            -- HQ가 반려
+    'REQUESTED',
+    'HQ1_REJECTED',
+    'ESTIMATING',
+    'APPROVAL_PENDING',
+    'HQ2_REJECTED',
+    'IN_PROGRESS',
+    'COMPLETED'
   ) NOT NULL DEFAULT 'DRAFT',
 
   category       ENUM(
@@ -92,20 +94,19 @@ CREATE TABLE maintenance_request (
 
   vendor_id      BIGINT UNSIGNED NULL,
 
-  -- 견적 / 일정 / 사유
-  estimate_amount      DECIMAL(15,2) NULL,
-  estimate_comment     TEXT         NULL,
-  work_start_date      DATE         NULL,
-  work_end_date        DATE         NULL,
-  rejected_reason      VARCHAR(500) NULL,
+  estimate_amount         DECIMAL(15,2) NULL,
+  estimate_comment        TEXT         NULL,
+  work_start_date         DATE         NULL,
+  work_end_date           DATE         NULL,
+  estimate_resubmit_count INT NOT NULL DEFAULT 0,
+  rejected_reason         VARCHAR(500) NULL,
 
   result_comment     TEXT NULL,
   result_photo_url   VARCHAR(2048) NULL,
   work_completed_at  DATETIME NULL,
 
-  -- 타임스탬프
-  submitted_at         DATETIME NULL, -- 지점이 정식 제출한 시점
-  vendor_submitted_at  DATETIME NULL, -- 벤더가 견적 제출한 시점
+  submitted_at         DATETIME NULL,
+  vendor_submitted_at  DATETIME NULL,
   approved_by          BIGINT UNSIGNED NULL,
   approved_at          DATETIME NULL,
 
