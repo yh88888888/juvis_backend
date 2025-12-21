@@ -25,17 +25,17 @@ public class MaintenancePhoto {
     private String fileKey;
 
     @Column(nullable = false)
-    private String url;
+    private String publicUrl;
 
     // ✅ 이게 없어서 계속 에러 난 거다
     public static MaintenancePhoto of(
             Maintenance maintenance,
             String fileKey,
-            String url) {
+            String publicUrl) {
         return MaintenancePhoto.builder()
                 .maintenance(maintenance)
                 .fileKey(fileKey)
-                .url(url)
+                .publicUrl(publicUrl)
                 .build();
     }
 }

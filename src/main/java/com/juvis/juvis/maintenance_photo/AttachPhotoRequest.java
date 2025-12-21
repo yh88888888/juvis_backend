@@ -5,5 +5,5 @@ import lombok.Data;
 @Data
 public class AttachPhotoRequest {
     private String fileKey;
-    private String url;
+    private String publicUrl;
 }

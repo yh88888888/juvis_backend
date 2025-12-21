@@ -6,8 +6,10 @@ import lombok.Getter;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 
 import com.juvis.juvis._core.enums.MaintenanceStatus;
+import com.juvis.juvis.maintenance_photo.MaintenancePhoto;
 
 public class MaintenanceResponse {
 
@@ -15,7 +17,7 @@ public class MaintenanceResponse {
     @AllArgsConstructor
     public static class SimpleDTO {
         private Long id;
-         private String branchName;
+        private String branchName;
         private String requesterName;
 
         private String title;
@@ -52,6 +54,8 @@ public class MaintenanceResponse {
         public String category;
         public String categoryName;
 
+        private List<String> attachPhotoUrls;
+
         // Vendor
         private String vendorName;
         private String vendorPhone;
@@ -76,7 +80,7 @@ public class MaintenanceResponse {
         private LocalDateTime vendorSubmittedAt;
         private String rejectedReason;
 
-        public DetailDTO(Maintenance m) {
+        public DetailDTO(Maintenance m, List<String> attachPhotoUrls) {
             this.id = m.getId();
 
             this.branchName = m.getBranch() != null ? m.getBranch().getBranchName() : null;
@@ -90,6 +94,8 @@ public class MaintenanceResponse {
             this.status = m.getStatus();
             this.category = m.getCategory().name();
             this.categoryName = m.getCategory().getDisplayName();
+
+            this.attachPhotoUrls = attachPhotoUrls;
 
             if (m.getVendor() != null) {
                 this.vendorName = m.getVendor().getName();

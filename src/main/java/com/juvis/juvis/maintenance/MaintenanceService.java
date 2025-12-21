@@ -18,6 +18,7 @@ import com.juvis.juvis._core.error.ex.ExceptionApi403;
 import com.juvis.juvis.branch.Branch;
 import com.juvis.juvis.maintenance_photo.MaintenancePhoto;
 import com.juvis.juvis.maintenance_photo.MaintenancePhotoRepository;
+import com.juvis.juvis.maintenance_photo.PresignService;
 import com.juvis.juvis.user.LoginUser;
 import com.juvis.juvis.user.User;
 import com.juvis.juvis.user.UserRepository;
@@ -34,6 +35,7 @@ public class MaintenanceService {
     private final MaintenanceRepository maintenanceRepository;
     private final UserRepository userRepository;
     private final MaintenancePhotoRepository maintenancePhotoRepository;
+    private final PresignService presignService;
 
     // ---------- 공통 로더 ----------
     private User loadUser(LoginUser loginUser) {
@@ -71,11 +73,11 @@ public class MaintenanceService {
         Maintenance saved = maintenanceRepository.save(mr);
 
         // log.info(
-        //         "CREATE saved id={}, status={}, submit={}, requesterId={}",
-        //         saved.getId(),
-        //         saved.getStatus(),
-        //         dto.isSubmit(),
-        //         saved.getRequester() != null ? saved.getRequester().getId() : null);
+        // "CREATE saved id={}, status={}, submit={}, requesterId={}",
+        // saved.getId(),
+        // saved.getStatus(),
+        // dto.isSubmit(),
+        // saved.getRequester() != null ? saved.getRequester().getId() : null);
 
         // ✅ 여기서부터가 핵심
         List<MaintenanceRequest.PhotoDTO> photos = dto.getPhotos();
@@ -96,16 +98,17 @@ public class MaintenanceService {
     }
 
     @Transactional
-    public MaintenanceResponse.DetailDTO submitRequest(LoginUser loginUser, Long requestId) {
+    public void submitRequest(LoginUser loginUser, Long requestId) {
 
         if (loginUser.role() != UserRole.BRANCH) {
             throw new ExceptionApi403("지점만 제출할 수 있습니다.");
         }
 
-        // log.info("submitRequest requestId={}, loginUserId={}", requestId, loginUser.id());
+        // log.info("submitRequest requestId={}, loginUserId={}", requestId,
+        // loginUser.id());
         Maintenance mr = findByIdOrThrow(requestId);
         // log.info("submit target status={}, requesterId={}", mr.getStatus(),
-        //         mr.getRequester() != null ? mr.getRequester().getId() : null);
+        // mr.getRequester() != null ? mr.getRequester().getId() : null);
 
         // 지점은 보통 지점 소속이면 제출 가능하게 해도 되지만,
         // 너가 기존에 "본인 작성만" 정책을 쓰고 있어서 그대로 유지
@@ -123,7 +126,6 @@ public class MaintenanceService {
         // ✅ 여기 추가
         mr.getBranch().getBranchName();
 
-        return new MaintenanceResponse.DetailDTO(mr);
     }
 
     public Page<Maintenance> getBranchList(
@@ -146,7 +148,8 @@ public class MaintenanceService {
         return maintenanceRepository.searchForBranch(branch.getId(), status, category, pageable);
     }
 
-    public Maintenance getDetailForBranch(LoginUser loginUser, Long id) {
+    @Transactional(readOnly = true)
+    public MaintenanceResponse.DetailDTO getDetailForBranch(LoginUser loginUser, Long id) {
 
         if (loginUser == null || loginUser.role() != UserRole.BRANCH) {
             throw new ExceptionApi403("지점만 접근 가능합니다.");
@@ -160,14 +163,32 @@ public class MaintenanceService {
 
         Maintenance mr = findByIdOrThrow(id);
 
-        // 지점 소속이면 열람 가능
+                // 지점 소속이면 열람 가능
         if (mr.getBranch() == null || !mr.getBranch().getId().equals(branch.getId())) {
             throw new ExceptionApi403("열람 권한이 없습니다.");
         }
 
-        return mr;
+        return toDetailDTO(mr);
     }
 
+    private List<String> buildAttachPhotoUrls(Maintenance m) {
+        if (m == null || m.getId() == null)
+            return List.of();
+
+        List<MaintenancePhoto> photos = maintenancePhotoRepository.findByMaintenanceId(m.getId());
+        if (photos == null || photos.isEmpty())
+            return List.of();
+
+        return photos.stream()
+                .map(MaintenancePhoto::getFileKey)
+                .map(presignService::presignedGetUrl)
+                .filter(java.util.Objects::nonNull)
+                .toList();
+    }
+
+    public MaintenanceResponse.DetailDTO toDetailDTO(Maintenance m) {
+        return new MaintenanceResponse.DetailDTO(m, buildAttachPhotoUrls(m));
+    }
     // ========================= HQ =========================
 
     public Page<Maintenance> getHqList(

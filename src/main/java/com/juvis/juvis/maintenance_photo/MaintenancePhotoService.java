@@ -36,7 +36,7 @@ public class MaintenancePhotoService {
         MaintenancePhoto photo = MaintenancePhoto.builder()
                 .maintenance(m)
                 .fileKey(dto.getFileKey())
-                .url(dto.getUrl())
+                .publicUrl(dto.getPublicUrl())
                 .build();
 
         photoRepository.save(photo);

@@ -6,12 +6,14 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.juvis.juvis._core.util.Resp;
+import com.juvis.juvis.maintenance_photo.Presign.PresignGetRequest;
+import com.juvis.juvis.maintenance_photo.Presign.PresignRequest;
 
 import lombok.*;
 
 @RestController
 @RequiredArgsConstructor
-public class UploadController {
+public class PresignController {
 
     private final PresignService presignService;
 
@@ -20,16 +22,7 @@ public class UploadController {
         return Resp.ok(presignService.presignPut(req));
     }
 
-    @Getter @Setter
-    public static class PresignRequest {
-        private String fileName;
-        private String contentType;
-    }
 
-    @Getter
-    @AllArgsConstructor
-    public static class PresignResponse {
-        private String uploadUrl;
-        private String fileKey;
-    }
+
+    
 }

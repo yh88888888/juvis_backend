@@ -3,6 +3,7 @@ package com.juvis.juvis.maintenance;
 import com.juvis.juvis._core.enums.MaintenanceCategory;
 import com.juvis.juvis._core.enums.MaintenanceStatus;
 import com.juvis.juvis.branch.Branch;
+import com.juvis.juvis.maintenance_photo.MaintenancePhoto;
 import com.juvis.juvis.user.User;
 import jakarta.persistence.*;
 import lombok.*;
@@ -12,6 +13,8 @@ import org.hibernate.annotations.UpdateTimestamp;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "maintenance_request")
@@ -67,6 +70,10 @@ public class Maintenance {
    @Enumerated(EnumType.STRING)
    @Column(nullable = false, length = 30)
    private MaintenanceCategory category;
+
+   @OneToMany(mappedBy = "maintenance", cascade = CascadeType.ALL, orphanRemoval = true)
+   @OrderBy("id ASC") // 업로드 순서 보장 (선택)
+   private List<MaintenancePhoto> photos = new ArrayList<>();
 
    /*
     * =======================

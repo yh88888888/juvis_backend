@@ -190,7 +190,7 @@ create table maintenance_photo (
   id bigint unsigned auto_increment primary key,
   maintenance_id bigint unsigned not null,
   file_key varchar(255) not null,
-  url varchar(500) not null,
+  public_url varchar(500) not null,
   constraint fk_maintenance_photo_maintenance
     foreign key (maintenance_id)
     references maintenance_request (request_id)

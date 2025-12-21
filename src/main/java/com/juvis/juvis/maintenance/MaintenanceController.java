@@ -39,18 +39,18 @@ public class MaintenanceController {
             @AuthenticationPrincipal LoginUser loginUser,
             @RequestBody MaintenanceRequest.CreateDTO dto) {
         Maintenance m = maintenanceService.createByBranch(loginUser, dto);
-        return Resp.ok(new MaintenanceResponse.DetailDTO(m));
+        return Resp.ok(maintenanceService.toDetailDTO(m));
     }
 
     /**
      * 지점 – DRAFT/REJECTED 상태 요청 제출 (REQUESTED)
      */
     @PostMapping("/api/branch/maintenances/{id}/submit")
-public ResponseEntity<?> submitRequest(
-        @AuthenticationPrincipal LoginUser loginUser,
-        @PathVariable("id") Long id) {
-        MaintenanceResponse.DetailDTO dto = maintenanceService.submitRequest(loginUser, id);
-        return Resp.ok(dto);
+    public ResponseEntity<?> submitRequest(
+            @AuthenticationPrincipal LoginUser loginUser,
+            @PathVariable("id") Long id) {
+        maintenanceService.submitRequest(loginUser, id);
+        return Resp.ok("제출완료료");
     }
 
     @GetMapping("/api/branch/maintenances")
@@ -74,10 +74,11 @@ public ResponseEntity<?> submitRequest(
     @GetMapping("/api/branch/maintenances/{id}")
     public ResponseEntity<Resp<MaintenanceResponse.DetailDTO>> getDetailForBranch(
             @AuthenticationPrincipal LoginUser loginUser,
-            @PathVariable Long id) {
+            @PathVariable("id") Long id) {
 
-        Maintenance m = maintenanceService.getDetailForBranch(loginUser, id);
-        return Resp.ok(new MaintenanceResponse.DetailDTO(m));
+        MaintenanceResponse.DetailDTO dto = maintenanceService.getDetailForBranch(loginUser, id);
+
+        return Resp.ok(dto);
     }
 
     // ========================= HQ =========================
@@ -102,13 +103,13 @@ public ResponseEntity<?> submitRequest(
     @GetMapping("/hq/maintenance/requests/{id}")
     public ResponseEntity<?> getDetailForHq(
             @AuthenticationPrincipal LoginUser currentUser,
-            @PathVariable Long id) {
+            @PathVariable("id") Long id) {
         if (currentUser.role() != UserRole.HQ) {
             return Resp.forbidden("HQ 권한이 필요합니다.");
         }
 
         Maintenance m = maintenanceService.getDetailForHq(currentUser, id);
-        return Resp.ok(new MaintenanceResponse.DetailDTO(m));
+        return Resp.ok(maintenanceService.toDetailDTO(m));
     }
 
     /**
@@ -118,14 +119,14 @@ public ResponseEntity<?> submitRequest(
     @PostMapping("/hq/maintenance/requests/{id}/assign-vendor")
     public ResponseEntity<?> assignVendor(
             @AuthenticationPrincipal LoginUser currentUser,
-            @PathVariable Long id,
+            @PathVariable("id") Long id,
             @RequestBody MaintenanceRequest.AssignVendorDTO dto) {
         if (currentUser.role() != UserRole.HQ) {
             return Resp.forbidden("HQ 권한이 필요합니다.");
         }
 
         Maintenance m = maintenanceService.assignVendor(currentUser, id, dto);
-        return Resp.ok(new MaintenanceResponse.DetailDTO(m));
+        return Resp.ok(maintenanceService.toDetailDTO(m));
     }
 
     /**
@@ -134,14 +135,14 @@ public ResponseEntity<?> submitRequest(
     @PostMapping("/hq/maintenance/requests/{id}/approve")
     public ResponseEntity<?> approve(
             @AuthenticationPrincipal LoginUser currentUser,
-            @PathVariable Long id,
+            @PathVariable("id") Long id,
             @RequestBody(required = false) MaintenanceRequest.ApproveDTO dto) {
         if (currentUser.role() != UserRole.HQ) {
             return Resp.forbidden("HQ 권한이 필요합니다.");
         }
 
         Maintenance m = maintenanceService.approve(currentUser, id, dto);
-        return Resp.ok(new MaintenanceResponse.DetailDTO(m));
+        return Resp.ok(maintenanceService.toDetailDTO(m));
     }
 
     /**
@@ -151,14 +152,14 @@ public ResponseEntity<?> submitRequest(
     @PostMapping("/hq/maintenance/requests/{id}/reject")
     public ResponseEntity<?> reject(
             @AuthenticationPrincipal LoginUser currentUser,
-            @PathVariable Long id,
+            @PathVariable("id") Long id,
             @RequestBody MaintenanceRequest.RejectDTO dto) {
         if (currentUser.role() != UserRole.HQ) {
             return Resp.forbidden("HQ 권한이 필요합니다.");
         }
 
         Maintenance m = maintenanceService.reject(currentUser, id, dto);
-        return Resp.ok(new MaintenanceResponse.DetailDTO(m));
+        return Resp.ok(maintenanceService.toDetailDTO(m));
     }
 
     // ========================= VENDOR =========================
@@ -186,14 +187,14 @@ public ResponseEntity<?> submitRequest(
     @PostMapping("/vendor/maintenance/requests/{id}/submit-estimate")
     public ResponseEntity<?> submitEstimate(
             @AuthenticationPrincipal LoginUser currentUser,
-            @PathVariable Long id,
+            @PathVariable("id") Long id,
             @RequestBody MaintenanceRequest.SubmitEstimateDTO dto) {
         if (currentUser.role() != UserRole.VENDOR) {
             return Resp.forbidden("VENDOR 권한이 필요합니다.");
         }
 
         Maintenance m = maintenanceService.submitEstimate(currentUser, id, dto);
-        return Resp.ok(new MaintenanceResponse.DetailDTO(m));
+        return Resp.ok(maintenanceService.toDetailDTO(m));
     }
 
     /**
@@ -202,13 +203,13 @@ public ResponseEntity<?> submitRequest(
     @PostMapping("/vendor/maintenance/requests/{id}/complete")
     public ResponseEntity<?> completeWork(
             @AuthenticationPrincipal LoginUser currentUser,
-            @PathVariable Long id,
+            @PathVariable("id") Long id,
             @RequestBody MaintenanceRequest.CompleteWorkDTO dto) {
         if (currentUser.role() != UserRole.VENDOR) {
             return Resp.forbidden("VENDOR 권한이 필요합니다.");
         }
 
         Maintenance m = maintenanceService.completeWork(currentUser, id, dto);
-        return Resp.ok(new MaintenanceResponse.DetailDTO(m));
+        return Resp.ok(maintenanceService.toDetailDTO(m));
     }
 }
