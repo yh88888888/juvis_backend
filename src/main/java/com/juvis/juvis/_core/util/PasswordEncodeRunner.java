@@ -1,4 +1,4 @@
-package com.juvis.juvis;
+package com.juvis.juvis._core.util;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;

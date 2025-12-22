@@ -45,17 +45,11 @@ public class Maintenance {
    @JoinColumn(name = "vendor_id")
    private User vendor;
 
-   // 최종 승인자 (HQ 사용자)
-   @ManyToOne(fetch = FetchType.LAZY)
-   @JoinColumn(name = "approved_by")
-   private User approvedBy;
-
    /*
-    * =======================
-    * 기본 요청 정보
-    * =======================
-    */
-
+   * =======================
+   * 기본 요청 정보
+   * =======================
+   */
    @Column(length = 200, nullable = false)
    private String title;
 
@@ -66,21 +60,19 @@ public class Maintenance {
    @Column(nullable = false, length = 20)
    private MaintenanceStatus status;
 
-   // ✅ 분야(Category) 추가
    @Enumerated(EnumType.STRING)
    @Column(nullable = false, length = 30)
    private MaintenanceCategory category;
 
    @OneToMany(mappedBy = "maintenance", cascade = CascadeType.ALL, orphanRemoval = true)
-   @OrderBy("id ASC") // 업로드 순서 보장 (선택)
+   @OrderBy("id ASC")
    private List<MaintenancePhoto> photos = new ArrayList<>();
 
    /*
-    * =======================
-    * 견적 / 작업 일정
-    * =======================
-    */
-
+   * =======================
+   * 견적 / 작업 일정
+   * =======================
+   */
    @Column(name = "estimate_amount", precision = 15, scale = 2)
    private BigDecimal estimateAmount;
 
@@ -95,14 +87,13 @@ public class Maintenance {
    private LocalDate workEndDate;
 
    @Column(name = "estimate_resubmit_count", nullable = false)
-   private int estimateResubmitCount; // default 0
+   private int estimateResubmitCount;
 
    /*
-    * =======================
-    * 작업 결과 (✅ 추가된 핵심)
-    * =======================
-    */
-
+   * =======================
+   * 작업 결과
+   * =======================
+   */
    @Lob
    @Column(name = "result_comment")
    private String resultComment;
@@ -114,28 +105,43 @@ public class Maintenance {
    private LocalDateTime workCompletedAt;
 
    /*
-    * =======================
-    * 승인 / 반려
-    * =======================
-    */
+   * =======================
+   * ✅ 반려 사유(1차/2차 분리)
+   * =======================
+   */
+   @Column(name = "request_rejected_reason", length = 500)
+   private String requestRejectedReason;
 
-   @Column(name = "rejected_reason", length = 500)
-   private String rejectedReason;
-
-   @Column(name = "approved_at")
-   private LocalDateTime approvedAt;
+   @Column(name = "estimate_rejected_reason", length = 500)
+   private String estimateRejectedReason;
 
    /*
-    * =======================
-    * 프로세스 타임스탬프
-    * =======================
-    */
+   * =======================
+   * ✅ 결정 기록(승인/반려 공통, 1차/2차 분리)
+   * =======================
+   */
+   @ManyToOne(fetch = FetchType.LAZY)
+   @JoinColumn(name = "request_approved_by")
+   private User requestApprovedBy;
 
-   // 지점 제출 시점
+   @Column(name = "request_approved_at")
+   private LocalDateTime requestApprovedAt;
+
+   @ManyToOne(fetch = FetchType.LAZY)
+   @JoinColumn(name = "estimate_approved_by")
+   private User estimateApprovedBy;
+
+   @Column(name = "estimate_approved_at")
+   private LocalDateTime estimateApprovedAt;
+
+   /*
+   * =======================
+   * 프로세스 타임스탬프
+   * =======================
+   */
    @Column(name = "submitted_at")
    private LocalDateTime submittedAt;
 
-   // 벤더 견적 제출 시점
    @Column(name = "vendor_submitted_at")
    private LocalDateTime vendorSubmittedAt;
 
@@ -145,29 +151,32 @@ public class Maintenance {
    @UpdateTimestamp
    private LocalDateTime updatedAt;
 
+   // -----------------------
+   // 생성 헬퍼
+   // -----------------------
    public static Maintenance createDraft(Branch branch, User requester, MaintenanceRequest.CreateDTO dto) {
       return Maintenance.builder()
-            .branch(branch)
-            .requester(requester)
-            .title(dto.getTitle())
-            .description(dto.getDescription())
-            .category(dto.getCategory())
-            .status(MaintenanceStatus.DRAFT) // ✅ 여기서 저장됨
-            .estimateResubmitCount(0) // ✅ 추가
-            .submittedAt(null)
-            .build();
+               .branch(branch)
+               .requester(requester)
+               .title(dto.getTitle())
+               .description(dto.getDescription())
+               .category(dto.getCategory())
+               .status(MaintenanceStatus.DRAFT)
+               .estimateResubmitCount(0)
+               .submittedAt(null)
+               .build();
    }
 
    public static Maintenance createSubmitted(Branch branch, User requester, MaintenanceRequest.CreateDTO dto) {
       return Maintenance.builder()
-            .branch(branch)
-            .requester(requester)
-            .title(dto.getTitle())
-            .description(dto.getDescription())
-            .category(dto.getCategory())
-            .status(MaintenanceStatus.REQUESTED) // ✅ 여기서 저장됨
-            .submittedAt(LocalDateTime.now()) // ✅ 제출 시점 저장
-            .estimateResubmitCount(0)
-            .build();
+               .branch(branch)
+               .requester(requester)
+               .title(dto.getTitle())
+               .description(dto.getDescription())
+               .category(dto.getCategory())
+               .status(MaintenanceStatus.REQUESTED)
+               .submittedAt(LocalDateTime.now())
+               .estimateResubmitCount(0)
+               .build();
    }
 }

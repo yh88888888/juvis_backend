@@ -20,8 +20,6 @@ public class MaintenanceRequest {
         private String description;
         private MaintenanceCategory category;
         private boolean submit;
-
-        // 👇 이걸로 간다
         private List<PhotoDTO> photos;
     }
 
@@ -40,7 +38,7 @@ public class MaintenanceRequest {
     @Getter
     @Setter
     public static class ApproveDTO {
-        // 필요시 필드 추가
+        // 필요시 확장
     }
 
     @Getter
@@ -62,7 +60,7 @@ public class MaintenanceRequest {
     @Setter
     public static class CompleteWorkDTO {
         private String resultComment;
-        private String resultPhotoUrl; // S3 URL 등
+        private String resultPhotoUrl;
         private LocalDate actualEndDate;
     }
 }

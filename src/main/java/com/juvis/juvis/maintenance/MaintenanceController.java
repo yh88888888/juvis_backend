@@ -86,89 +86,89 @@ public class MaintenanceController {
     @GetMapping("/hq/maintenance/requests")
     public ResponseEntity<Resp<Page<MaintenanceResponse.SimpleDTO>>> getRequestsForHq(
             @AuthenticationPrincipal LoginUser currentUser,
-            @RequestParam(required = false) MaintenanceStatus status,
-            @RequestParam(required = false) MaintenanceCategory category,
-            @RequestParam(required = false) Long branchId,
+            @RequestParam(name = "status", required = false) MaintenanceStatus status,
+            @RequestParam(name = "category", required = false) MaintenanceCategory category,
+            @RequestParam(name = "branchId", required = false) Long branchId,
             @PageableDefault(page = 0, size = 20) @SortDefault(sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
-
         Page<Maintenance> result = maintenanceService.getHqList(currentUser, status, category, branchId, pageable);
         Page<MaintenanceResponse.SimpleDTO> dtoPage = result.map(MaintenanceResponse.SimpleDTO::new);
         return Resp.ok(dtoPage);
     }
 
-    /**
-     * HQ – 요청 상세 보기
-     */
-
-    @GetMapping("/hq/maintenance/requests/{id}")
+    @GetMapping("/api/hq/maintenance/requests/{id}")
     public ResponseEntity<?> getDetailForHq(
             @AuthenticationPrincipal LoginUser currentUser,
             @PathVariable("id") Long id) {
-        if (currentUser.role() != UserRole.HQ) {
-            return Resp.forbidden("HQ 권한이 필요합니다.");
-        }
 
-        Maintenance m = maintenanceService.getDetailForHq(currentUser, id);
-        return Resp.ok(maintenanceService.toDetailDTO(m));
+        MaintenanceResponse.DetailDTO dto = maintenanceService.getDetailDtoForHq(currentUser, id);
+        return Resp.ok(dto);
     }
 
-    /**
-     * HQ 1차 승인 + Vendor 지정 + ESTIMATING
-     */
-
-    @PostMapping("/hq/maintenance/requests/{id}/assign-vendor")
-    public ResponseEntity<?> assignVendor(
-            @AuthenticationPrincipal LoginUser currentUser,
-            @PathVariable("id") Long id,
-            @RequestBody MaintenanceRequest.AssignVendorDTO dto) {
-        if (currentUser.role() != UserRole.HQ) {
-            return Resp.forbidden("HQ 권한이 필요합니다.");
-        }
-
-        Maintenance m = maintenanceService.assignVendor(currentUser, id, dto);
-        return Resp.ok(maintenanceService.toDetailDTO(m));
-    }
-
-    /**
-     * “HQ 2차 승인(견적 승인): APPROVAL_PENDING → IN_PROGRESS”
-     */
-    @PostMapping("/hq/maintenance/requests/{id}/approve")
-    public ResponseEntity<?> approve(
+     // ✅ HQ 1차 승인: REQUESTED -> ESTIMATING
+    @PostMapping("/api/hq/maintenance/requests/{id}/approve-request")
+    public ResponseEntity<?> approveRequest(
             @AuthenticationPrincipal LoginUser currentUser,
             @PathVariable("id") Long id,
             @RequestBody(required = false) MaintenanceRequest.ApproveDTO dto) {
+
         if (currentUser.role() != UserRole.HQ) {
             return Resp.forbidden("HQ 권한이 필요합니다.");
         }
 
-        Maintenance m = maintenanceService.approve(currentUser, id, dto);
-        return Resp.ok(maintenanceService.toDetailDTO(m));
+        Maintenance m = maintenanceService.approveRequest(currentUser, id, dto);
+        return Resp.ok(new MaintenanceResponse.DetailDTO(m, java.util.List.of()));
+    }
+    // ✅ HQ 2차 승인: APPROVAL_PENDING -> IN_PROGRESS
+    @PostMapping("/api/hq/maintenance/requests/{id}/approve-estimate")
+    public ResponseEntity<?> approveEstimate(
+            @AuthenticationPrincipal LoginUser currentUser,
+            @PathVariable("id") Long id,
+            @RequestBody(required = false) MaintenanceRequest.ApproveDTO dto) {
+
+        if (currentUser.role() != UserRole.HQ) {
+            return Resp.forbidden("HQ 권한이 필요합니다.");
+        }
+
+        Maintenance m = maintenanceService.approveEstimate(currentUser, id, dto);
+        return Resp.ok(new MaintenanceResponse.DetailDTO(m, java.util.List.of()));
     }
 
-    /**
-     * 상태에 따라 HQ1_REJECTED 또는 HQ2_REJECTED
-     */
-
-    @PostMapping("/hq/maintenance/requests/{id}/reject")
-    public ResponseEntity<?> reject(
+    // ✅ HQ 1차 반려: REQUESTED -> HQ1_REJECTED
+    @PostMapping("/api/hq/maintenance/requests/{id}/reject-request")
+    public ResponseEntity<?> rejectRequest(
             @AuthenticationPrincipal LoginUser currentUser,
             @PathVariable("id") Long id,
             @RequestBody MaintenanceRequest.RejectDTO dto) {
+
         if (currentUser.role() != UserRole.HQ) {
             return Resp.forbidden("HQ 권한이 필요합니다.");
         }
 
-        Maintenance m = maintenanceService.reject(currentUser, id, dto);
-        return Resp.ok(maintenanceService.toDetailDTO(m));
+        Maintenance m = maintenanceService.rejectRequest(currentUser, id, dto);
+        return Resp.ok(new MaintenanceResponse.DetailDTO(m, java.util.List.of()));
     }
 
+// ✅ HQ 2차 반려: APPROVAL_PENDING -> HQ2_REJECTED
+    @PostMapping("/api/hq/maintenance/requests/{id}/reject-estimate")
+    public ResponseEntity<?> rejectEstimate(
+            @AuthenticationPrincipal LoginUser currentUser,
+            @PathVariable("id") Long id,
+            @RequestBody MaintenanceRequest.RejectDTO dto) {
+
+        if (currentUser.role() != UserRole.HQ) {
+            return Resp.forbidden("HQ 권한이 필요합니다.");
+        }
+
+        Maintenance m = maintenanceService.rejectEstimate(currentUser, id, dto);
+        return Resp.ok(new MaintenanceResponse.DetailDTO(m, java.util.List.of()));
+    }
     // ========================= VENDOR =========================
 
     /**
      * Vendor – 내게 배정된 요청 목록
      */
 
-    @GetMapping("/vendor/maintenance/requests")
+    @GetMapping("/api/vendor/maintenance/requests")
     public ResponseEntity<?> getRequestsForVendor(
             @AuthenticationPrincipal LoginUser currentUser,
             @RequestParam(required = false) String status) {
@@ -184,7 +184,7 @@ public class MaintenanceController {
     /**
      * Vendor – 견적 제출 (ESTIMATING → APPROVAL_PENDING)
      */
-    @PostMapping("/vendor/maintenance/requests/{id}/submit-estimate")
+    @PostMapping("/api/vendor/maintenance/requests/{id}/submit-estimate")
     public ResponseEntity<?> submitEstimate(
             @AuthenticationPrincipal LoginUser currentUser,
             @PathVariable("id") Long id,
@@ -200,7 +200,7 @@ public class MaintenanceController {
     /**
      * Vendor – 현장 조치 완료 + 결과/사진 업로드 (IN_PROGRESS → COMPLETED)
      */
-    @PostMapping("/vendor/maintenance/requests/{id}/complete")
+    @PostMapping("/api/vendor/maintenance/requests/{id}/complete")
     public ResponseEntity<?> completeWork(
             @AuthenticationPrincipal LoginUser currentUser,
             @PathVariable("id") Long id,

@@ -3,7 +3,7 @@
 -- USE maintenance_app;
 
 -- 1) 기존 DB 삭제
-DROP DATABASE IF EXISTS maintenance_app;
+DROP DATABASE IF EXISTS maintenance_app;         
 
 -- 2) 새로 생성
 CREATE DATABASE maintenance_app
@@ -99,7 +99,11 @@ CREATE TABLE maintenance_request (
   work_start_date         DATE         NULL,
   work_end_date           DATE         NULL,
   estimate_resubmit_count INT NOT NULL DEFAULT 0,
-  rejected_reason         VARCHAR(500) NULL,
+
+  -- ✅ 1차 반려 사유
+  request_rejected_reason  VARCHAR(500) NULL,
+  -- ✅ 2차 반려 사유
+  estimate_rejected_reason VARCHAR(500) NULL,
 
   result_comment     TEXT NULL,
   result_photo_url   VARCHAR(2048) NULL,
@@ -107,8 +111,14 @@ CREATE TABLE maintenance_request (
 
   submitted_at         DATETIME NULL,
   vendor_submitted_at  DATETIME NULL,
-  approved_by          BIGINT UNSIGNED NULL,
-  approved_at          DATETIME NULL,
+
+  -- ✅ 1차 결정(승인/반려 공통) 기록
+  request_approved_by BIGINT UNSIGNED NULL,
+  request_approved_at DATETIME NULL,
+
+  -- ✅ 2차 결정(승인/반려 공통) 기록
+  estimate_approved_by BIGINT UNSIGNED NULL,
+  estimate_approved_at DATETIME NULL,
 
   created_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -134,8 +144,12 @@ CREATE TABLE maintenance_request (
     FOREIGN KEY (vendor_id) REFERENCES user_tb(user_id)
     ON UPDATE RESTRICT ON DELETE SET NULL,
 
-  CONSTRAINT fk_mr_approved_by
-    FOREIGN KEY (approved_by) REFERENCES user_tb(user_id)
+  CONSTRAINT fk_mr_request_approved_by
+    FOREIGN KEY (request_approved_by) REFERENCES user_tb(user_id)
+    ON UPDATE RESTRICT ON DELETE SET NULL,
+
+  CONSTRAINT fk_mr_estimate_approved_by
+    FOREIGN KEY (estimate_approved_by) REFERENCES user_tb(user_id)
     ON UPDATE RESTRICT ON DELETE SET NULL
 ) ENGINE=InnoDB;
 

@@ -9,7 +9,6 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 import com.juvis.juvis._core.enums.MaintenanceStatus;
-import com.juvis.juvis.maintenance_photo.MaintenancePhoto;
 
 public class MaintenanceResponse {
 
@@ -19,6 +18,7 @@ public class MaintenanceResponse {
         private Long id;
         private String branchName;
         private String requesterName;
+        private BigDecimal estimateAmount;
 
         private String title;
         private MaintenanceStatus status;
@@ -30,6 +30,7 @@ public class MaintenanceResponse {
             this.id = m.getId();
             this.branchName = m.getBranch() != null ? m.getBranch().getBranchName() : null;
             this.requesterName = m.getRequester() != null ? m.getRequester().getName() : null;
+            this.estimateAmount = m.getEstimateAmount();
             this.title = m.getTitle();
             this.status = m.getStatus();
             this.createdAt = m.getCreatedAt();
@@ -51,6 +52,7 @@ public class MaintenanceResponse {
         private String title;
         private String description;
         private MaintenanceStatus status;
+
         public String category;
         public String categoryName;
 
@@ -73,14 +75,21 @@ public class MaintenanceResponse {
         private String resultPhotoUrl;
         private LocalDateTime workCompletedAt;
 
-        // 승인
-        private String approvedByName;
-        private LocalDateTime approvedAt;
+        // ✅ 1차 결정(승인/반려 공통)
+        private String requestApprovedByName;
+        private LocalDateTime requestApprovedAt;
+
+        // ✅ 2차 결정(승인/반려 공통)
+        private String estimateApprovedByName;
+        private LocalDateTime estimateApprovedAt;
+
+        // ✅ 반려 사유(1/2차 분리)
+        private String requestRejectedReason;
+        private String estimateRejectedReason;
 
         private LocalDateTime createdAt;
         private LocalDateTime submittedAt;
         private LocalDateTime vendorSubmittedAt;
-        private String rejectedReason;
 
         public DetailDTO(Maintenance m, List<String> attachPhotoUrls) {
             this.id = m.getId();
@@ -115,13 +124,20 @@ public class MaintenanceResponse {
             this.resultPhotoUrl = m.getResultPhotoUrl();
             this.workCompletedAt = m.getWorkCompletedAt();
 
-            this.approvedByName = m.getApprovedBy() != null ? m.getApprovedBy().getName() : null;
-            this.approvedAt = m.getApprovedAt();
+            this.requestApprovedByName =
+                    m.getRequestApprovedBy() != null ? m.getRequestApprovedBy().getName() : null;
+            this.requestApprovedAt = m.getRequestApprovedAt();
+
+            this.estimateApprovedByName =
+                    m.getEstimateApprovedBy() != null ? m.getEstimateApprovedBy().getName() : null;
+            this.estimateApprovedAt = m.getEstimateApprovedAt();
+
+            this.requestRejectedReason = m.getRequestRejectedReason();
+            this.estimateRejectedReason = m.getEstimateRejectedReason();
 
             this.createdAt = m.getCreatedAt();
             this.submittedAt = m.getSubmittedAt();
             this.vendorSubmittedAt = m.getVendorSubmittedAt();
-            this.rejectedReason = m.getRejectedReason();
         }
     }
 }
