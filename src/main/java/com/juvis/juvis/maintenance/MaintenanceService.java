@@ -13,13 +13,13 @@ import com.juvis.juvis._core.enums.MaintenanceCategory;
 import com.juvis.juvis._core.enums.MaintenanceStatus;
 import com.juvis.juvis._core.enums.UserRole;
 import com.juvis.juvis._core.error.ex.ExceptionApi400;
-import com.juvis.juvis._core.error.ex.ExceptionApi401;
 import com.juvis.juvis._core.error.ex.ExceptionApi403;
 import com.juvis.juvis._core.error.ex.ExceptionApi404;
 import com.juvis.juvis.branch.Branch;
 import com.juvis.juvis.maintenance_photo.MaintenancePhoto;
 import com.juvis.juvis.maintenance_photo.MaintenancePhotoRepository;
 import com.juvis.juvis.maintenance_photo.PresignService;
+import com.juvis.juvis.notification.NotificationService;
 import com.juvis.juvis.user.LoginUser;
 import com.juvis.juvis.user.User;
 import com.juvis.juvis.user.UserRepository;
@@ -37,14 +37,15 @@ public class MaintenanceService {
     private final UserRepository userRepository;
     private final MaintenancePhotoRepository maintenancePhotoRepository;
     private final PresignService presignService;
+    private final NotificationService notificationService;
 
     // ---------- 공통 로더 ----------
-        private User loadUser(LoginUser loginUser) {
+    private User loadUser(LoginUser loginUser) {
         return userRepository.findById(loginUser.id())
                 .orElseThrow(() -> new ExceptionApi400("유저를 찾을 수 없습니다. id=" + loginUser.id()));
     }
 
-        private Maintenance findByIdOrThrow(Long id) {
+    private Maintenance findByIdOrThrow(Long id) {
         return maintenanceRepository.findById(id)
                 .orElseThrow(() -> new ExceptionApi400("요청을 찾을 수 없습니다. id=" + id));
     }
@@ -119,8 +120,10 @@ public class MaintenanceService {
             throw new ExceptionApi400("제출할 수 없는 상태입니다.");
         }
 
-        mr.setStatus(MaintenanceStatus.REQUESTED);
+        changeStatusWithNotify(mr, MaintenanceStatus.REQUESTED);
         mr.setSubmittedAt(LocalDateTime.now());
+
+
 
         // ✅ 여기 추가
         mr.getBranch().getBranchName();
@@ -224,7 +227,7 @@ public class MaintenanceService {
         return toDetailDTO(m);
     }
 
-     // ----------------------------
+    // ----------------------------
     // HQ: 1차 승인 (REQUESTED -> ESTIMATING)
     // ----------------------------
     @Transactional
@@ -241,7 +244,7 @@ public class MaintenanceService {
 
         User hqUser = loadUser(currentUser);
 
-        m.setStatus(MaintenanceStatus.ESTIMATING);
+        changeStatusWithNotify(m, MaintenanceStatus.ESTIMATING);
 
         // ✅ 결정 기록(승인/반려 공통)
         m.setRequestApprovedBy(hqUser);
@@ -252,7 +255,6 @@ public class MaintenanceService {
 
         return m;
     }
-
 
     // ----------------------------
     // HQ: 2차 승인 (APPROVAL_PENDING -> IN_PROGRESS)
@@ -274,7 +276,7 @@ public class MaintenanceService {
 
         User hqUser = loadUser(currentUser);
 
-        m.setStatus(MaintenanceStatus.IN_PROGRESS);
+        changeStatusWithNotify(m, MaintenanceStatus.IN_PROGRESS);
 
         // ✅ 결정 기록(승인/반려 공통)
         m.setEstimateApprovedBy(hqUser);
@@ -289,7 +291,7 @@ public class MaintenanceService {
     // ----------------------------
     // HQ: 1차 반려 (REQUESTED -> HQ1_REJECTED)
     // ----------------------------
-     // ----------------------------
+    // ----------------------------
     // HQ: 1차 반려 (REQUESTED -> HQ1_REJECTED)
     // ----------------------------
     @Transactional
@@ -309,7 +311,7 @@ public class MaintenanceService {
 
         User hqUser = loadUser(currentUser);
 
-        m.setStatus(MaintenanceStatus.HQ1_REJECTED);
+        changeStatusWithNotify(m, MaintenanceStatus.HQ1_REJECTED);
         m.setRequestRejectedReason(dto.getReason().trim());
 
         // ✅ 반려여도 “결정자/결정일” 찍히게
@@ -319,8 +321,7 @@ public class MaintenanceService {
         return m;
     }
 
-
-// ----------------------------
+    // ----------------------------
     // HQ: 2차 반려 (APPROVAL_PENDING -> HQ2_REJECTED)
     // ----------------------------
     @Transactional
@@ -340,7 +341,7 @@ public class MaintenanceService {
 
         User hqUser = loadUser(currentUser);
 
-        m.setStatus(MaintenanceStatus.HQ2_REJECTED);
+        changeStatusWithNotify(m, MaintenanceStatus.HQ2_REJECTED);
         m.setEstimateRejectedReason(dto.getReason().trim());
 
         // ✅ 반려여도 “결정자/결정일” 찍히게
@@ -390,9 +391,9 @@ public class MaintenanceService {
         return maintenanceRepository.findByVendorAndStatus(vendor, s);
     }
 
-     // ----------------------------
+    // ----------------------------
     // Vendor: 견적 제출 (ESTIMATING -> APPROVAL_PENDING)
-    //         견적 재제출 (HQ2_REJECTED -> APPROVAL_PENDING) 단 1회
+    // 견적 재제출 (HQ2_REJECTED -> APPROVAL_PENDING) 단 1회
     // ----------------------------
     @Transactional
     public Maintenance submitEstimate(LoginUser currentUser, Long id, MaintenanceRequest.SubmitEstimateDTO dto) {
@@ -418,7 +419,8 @@ public class MaintenanceService {
         }
 
         // (선택) 이 요청에 지정된 vendor만 제출하도록 제한하고 싶으면 여기서 체크
-        // 예: if (m.getVendor()==null || !m.getVendor().getId().equals(currentUser.id())) throw...
+        // 예: if (m.getVendor()==null ||
+        // !m.getVendor().getId().equals(currentUser.id())) throw...
 
         m.setEstimateAmount(dto.getEstimateAmount());
         m.setEstimateComment(dto.getEstimateComment());
@@ -426,13 +428,11 @@ public class MaintenanceService {
         m.setWorkEndDate(dto.getWorkEndDate());
 
         m.setVendorSubmittedAt(LocalDateTime.now());
-        m.setStatus(MaintenanceStatus.APPROVAL_PENDING);
-
+        changeStatusWithNotify(m, MaintenanceStatus.APPROVAL_PENDING);
         return m;
     }
 
-
-     // ----------------------------
+    // ----------------------------
     // Vendor: 작업 완료 제출 (IN_PROGRESS -> COMPLETED)
     // ----------------------------
     @Transactional
@@ -451,8 +451,15 @@ public class MaintenanceService {
         m.setResultPhotoUrl(dto != null ? dto.getResultPhotoUrl() : null);
         m.setWorkCompletedAt(LocalDateTime.now()); // actualEndDate 쓰고 싶으면 변환해서 별도 저장
 
-        m.setStatus(MaintenanceStatus.COMPLETED);
+        changeStatusWithNotify(m, MaintenanceStatus.COMPLETED);
 
         return m;
     }
+
+private void changeStatusWithNotify(Maintenance m, MaintenanceStatus next) {
+    MaintenanceStatus before = m.getStatus();
+    if (before == next) return;         // ✅ 같은 상태면 아무것도 안 함 (중복 알림 1차 방지)
+    m.setStatus(next);
+    notificationService.notifyOnStatusChange(m, before, next);
+}
 }

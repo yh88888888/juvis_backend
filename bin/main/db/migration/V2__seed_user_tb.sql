@@ -92,7 +92,7 @@ INSERT INTO user_tb (user_id, username, password, name, phone, role, is_active, 
 (40, 'juvis_cj',  '$2a$10$GKAsSBUgWm1t..iLnwcz0OLWyfbucb/mcV2LhesYSp3DLsGAZ.TBS', '청주점',     '070-4838-7835', 'BRANCH', 1, 40),
 (41, 'juvis_pc',  '$2a$10$GKAsSBUgWm1t..iLnwcz0OLWyfbucb/mcV2LhesYSp3DLsGAZ.TBS', '평촌점',     '070-5092-5320', 'BRANCH', 1, 41),
 (42, 'juvis_ct',  '$2a$10$GKAsSBUgWm1t..iLnwcz0OLWyfbucb/mcV2LhesYSp3DLsGAZ.TBS', '본사',       '070-4838-7893', 'HQ',     1, 42),
-(43, 'juvis_vd',  '$2a$10$GKAsSBUgWm1t..iLnwcz0OLWyfbucb/mcV2LhesYSp3DLsGAZ.TBS', '관리업체체',  '070-4838-7893', 'VENDOR',     1, 43);
+(43, 'juvis_vd',  '$2a$10$GKAsSBUgWm1t..iLnwcz0OLWyfbucb/mcV2LhesYSp3DLsGAZ.TBS', '아이디진정성성',  '070-4838-7893', 'VENDOR',     1, 43);
 
 -- 3) maintenance_request seed
 -- ✅ category는 ENUM 값 중 하나여야 함. (ETC/HVAC/... 중)

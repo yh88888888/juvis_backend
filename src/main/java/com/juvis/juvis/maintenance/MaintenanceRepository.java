@@ -1,5 +1,6 @@
 package com.juvis.juvis.maintenance;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -95,4 +96,16 @@ public interface MaintenanceRepository extends JpaRepository<Maintenance, Long> 
 
   // ✅ HQ 요약: 상태별 count
   long countByStatus(MaintenanceStatus status);
+
+  long countByVendor_IdAndStatus(Integer vendorId, MaintenanceStatus status);
+
+  // ✅ vendor + status
+  List<Maintenance> findByVendorIdAndStatusOrderByCreatedAtDesc(Integer  vendorId, MaintenanceStatus status);
+
+  // ✅ vendor + status in
+  List<Maintenance> findByVendorIdAndStatusInOrderByCreatedAtDesc(Integer  vendorId,
+      Collection<MaintenanceStatus> statuses);
+
+  // ✅ summary count
+  long countByVendorIdAndStatusIn(Integer  vendorId, Collection<MaintenanceStatus> statuses);
 }

@@ -20,6 +20,8 @@ public class MaintenanceResponse {
         private String requesterName;
         private BigDecimal estimateAmount;
 
+        private LocalDate workStartDate;
+
         private String title;
         private MaintenanceStatus status;
 
@@ -31,6 +33,7 @@ public class MaintenanceResponse {
             this.branchName = m.getBranch() != null ? m.getBranch().getBranchName() : null;
             this.requesterName = m.getRequester() != null ? m.getRequester().getName() : null;
             this.estimateAmount = m.getEstimateAmount();
+            this.workStartDate = m.getWorkStartDate();
             this.title = m.getTitle();
             this.status = m.getStatus();
             this.createdAt = m.getCreatedAt();
@@ -124,12 +127,11 @@ public class MaintenanceResponse {
             this.resultPhotoUrl = m.getResultPhotoUrl();
             this.workCompletedAt = m.getWorkCompletedAt();
 
-            this.requestApprovedByName =
-                    m.getRequestApprovedBy() != null ? m.getRequestApprovedBy().getName() : null;
+            this.requestApprovedByName = m.getRequestApprovedBy() != null ? m.getRequestApprovedBy().getName() : null;
             this.requestApprovedAt = m.getRequestApprovedAt();
 
-            this.estimateApprovedByName =
-                    m.getEstimateApprovedBy() != null ? m.getEstimateApprovedBy().getName() : null;
+            this.estimateApprovedByName = m.getEstimateApprovedBy() != null ? m.getEstimateApprovedBy().getName()
+                    : null;
             this.estimateApprovedAt = m.getEstimateApprovedAt();
 
             this.requestRejectedReason = m.getRequestRejectedReason();

@@ -229,20 +229,29 @@ CREATE TABLE comment (
     ON UPDATE RESTRICT ON DELETE RESTRICT
 ) ENGINE=InnoDB;
 
--- 8) notification
+-- 8) notification (수정본)
 CREATE TABLE notification (
-  notification_id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-  user_id         BIGINT UNSIGNED NOT NULL,
-  title           VARCHAR(200)    NOT NULL,
-  message         TEXT,
-  type            ENUM('REQUEST','APPROVAL','REJECTION','COMPLETION') NOT NULL,
-  is_read         TINYINT(1) NOT NULL DEFAULT 0,
-  created_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (notification_id),
-  KEY idx_n_user (user_id),
-  KEY idx_n_isread (is_read),
-  CONSTRAINT fk_n_user
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+
+  user_id BIGINT UNSIGNED NOT NULL,          -- 받는 사람 (user_tb.user_id)
+  maintenance_id BIGINT UNSIGNED NOT NULL,   -- 관련 유지보수 (maintenance_request.request_id)
+
+  status VARCHAR(50) NOT NULL,
+  message VARCHAR(255) NOT NULL,
+
+  is_read BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+  KEY idx_notif_user_created (user_id, created_at),
+  KEY idx_notif_user_read (user_id, is_read),
+  UNIQUE KEY uq_notif_dedupe (user_id, maintenance_id, status, is_read),
+
+  CONSTRAINT fk_notif_user
     FOREIGN KEY (user_id) REFERENCES user_tb(user_id)
+    ON UPDATE RESTRICT ON DELETE CASCADE,
+
+  CONSTRAINT fk_notif_maintenance
+    FOREIGN KEY (maintenance_id) REFERENCES maintenance_request(request_id)
     ON UPDATE RESTRICT ON DELETE CASCADE
 ) ENGINE=InnoDB;
 

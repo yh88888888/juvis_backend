@@ -1,8 +1,11 @@
 package com.juvis.juvis.user;
 
+import java.util.List;
 import java.util.Optional;
 
 import org.springframework.stereotype.Repository;
+
+import com.juvis.juvis._core.enums.UserRole;
 
 import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
@@ -42,5 +45,12 @@ public class UserRepository {
     public User save(User user) {
         em.persist(user);
         return user;
+    }
+
+    public List<User> findByRole(UserRole role) {
+        return em.createQuery("select u from User u where u.role = :role", User.class)
+                .setParameter("role", role)
+                .getResultList();
+
     }
 }

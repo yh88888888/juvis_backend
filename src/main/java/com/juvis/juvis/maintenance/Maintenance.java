@@ -46,10 +46,10 @@ public class Maintenance {
    private User vendor;
 
    /*
-   * =======================
-   * 기본 요청 정보
-   * =======================
-   */
+    * =======================
+    * 기본 요청 정보
+    * =======================
+    */
    @Column(length = 200, nullable = false)
    private String title;
 
@@ -69,10 +69,10 @@ public class Maintenance {
    private List<MaintenancePhoto> photos = new ArrayList<>();
 
    /*
-   * =======================
-   * 견적 / 작업 일정
-   * =======================
-   */
+    * =======================
+    * 견적 / 작업 일정
+    * =======================
+    */
    @Column(name = "estimate_amount", precision = 15, scale = 2)
    private BigDecimal estimateAmount;
 
@@ -90,10 +90,10 @@ public class Maintenance {
    private int estimateResubmitCount;
 
    /*
-   * =======================
-   * 작업 결과
-   * =======================
-   */
+    * =======================
+    * 작업 결과
+    * =======================
+    */
    @Lob
    @Column(name = "result_comment")
    private String resultComment;
@@ -105,10 +105,10 @@ public class Maintenance {
    private LocalDateTime workCompletedAt;
 
    /*
-   * =======================
-   * ✅ 반려 사유(1차/2차 분리)
-   * =======================
-   */
+    * =======================
+    * ✅ 반려 사유(1차/2차 분리)
+    * =======================
+    */
    @Column(name = "request_rejected_reason", length = 500)
    private String requestRejectedReason;
 
@@ -116,10 +116,10 @@ public class Maintenance {
    private String estimateRejectedReason;
 
    /*
-   * =======================
-   * ✅ 결정 기록(승인/반려 공통, 1차/2차 분리)
-   * =======================
-   */
+    * =======================
+    * ✅ 결정 기록(승인/반려 공통, 1차/2차 분리)
+    * =======================
+    */
    @ManyToOne(fetch = FetchType.LAZY)
    @JoinColumn(name = "request_approved_by")
    private User requestApprovedBy;
@@ -135,10 +135,10 @@ public class Maintenance {
    private LocalDateTime estimateApprovedAt;
 
    /*
-   * =======================
-   * 프로세스 타임스탬프
-   * =======================
-   */
+    * =======================
+    * 프로세스 타임스탬프
+    * =======================
+    */
    @Column(name = "submitted_at")
    private LocalDateTime submittedAt;
 
@@ -156,27 +156,31 @@ public class Maintenance {
    // -----------------------
    public static Maintenance createDraft(Branch branch, User requester, MaintenanceRequest.CreateDTO dto) {
       return Maintenance.builder()
-               .branch(branch)
-               .requester(requester)
-               .title(dto.getTitle())
-               .description(dto.getDescription())
-               .category(dto.getCategory())
-               .status(MaintenanceStatus.DRAFT)
-               .estimateResubmitCount(0)
-               .submittedAt(null)
-               .build();
+            .branch(branch)
+            .requester(requester)
+            .title(dto.getTitle())
+            .description(dto.getDescription())
+            .category(dto.getCategory())
+            .status(MaintenanceStatus.DRAFT)
+            .estimateResubmitCount(0)
+            .submittedAt(null)
+            .build();
    }
 
    public static Maintenance createSubmitted(Branch branch, User requester, MaintenanceRequest.CreateDTO dto) {
       return Maintenance.builder()
-               .branch(branch)
-               .requester(requester)
-               .title(dto.getTitle())
-               .description(dto.getDescription())
-               .category(dto.getCategory())
-               .status(MaintenanceStatus.REQUESTED)
-               .submittedAt(LocalDateTime.now())
-               .estimateResubmitCount(0)
-               .build();
+            .branch(branch)
+            .requester(requester)
+            .title(dto.getTitle())
+            .description(dto.getDescription())
+            .category(dto.getCategory())
+            .status(MaintenanceStatus.REQUESTED)
+            .submittedAt(LocalDateTime.now())
+            .estimateResubmitCount(0)
+            .build();
+   }
+
+   public void changeStatus(MaintenanceStatus next) {
+      this.status = next;
    }
 }
