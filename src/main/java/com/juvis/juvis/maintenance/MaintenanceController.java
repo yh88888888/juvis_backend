@@ -164,22 +164,20 @@ public class MaintenanceController {
     }
     // ========================= VENDOR =========================
 
-    /**
-     * Vendor – 내게 배정된 요청 목록
-     */
-
     @GetMapping("/api/vendor/maintenance/requests")
-    public ResponseEntity<?> getRequestsForVendor(
-            @AuthenticationPrincipal LoginUser currentUser,
-            @RequestParam(required = false) String status) {
-        if (currentUser.role() != UserRole.VENDOR) {
-            return Resp.forbidden("VENDOR 권한이 필요합니다.");
-        }
+public ResponseEntity<?> getRequestsForVendor(
+        @AuthenticationPrincipal LoginUser currentUser,
+        @RequestParam(name = "status", required = false) String status) {
 
-        List<Maintenance> list = maintenanceService.findForVendor(currentUser, status);
-        List<MaintenanceResponse.SimpleDTO> resp = list.stream().map(MaintenanceResponse.SimpleDTO::new).toList();
-        return Resp.ok(resp);
+    if (currentUser.role() != UserRole.VENDOR) {
+        return Resp.forbidden("VENDOR 권한이 필요합니다.");
     }
+
+    List<Maintenance> list = maintenanceService.findForVendor(currentUser, status);
+    List<MaintenanceResponse.SimpleDTO> resp =
+            list.stream().map(MaintenanceResponse.SimpleDTO::new).toList();
+    return Resp.ok(resp);
+}
 
     /**
      * Vendor – 견적 제출 (ESTIMATING → APPROVAL_PENDING)

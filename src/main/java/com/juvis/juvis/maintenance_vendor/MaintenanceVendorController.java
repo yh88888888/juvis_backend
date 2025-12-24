@@ -4,6 +4,7 @@ package com.juvis.juvis.maintenance_vendor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -32,5 +33,12 @@ public class MaintenanceVendorController {
             @AuthenticationPrincipal LoginUser loginUser,
             @RequestParam(value = "status", required = false) String status) {
         return Resp.ok(maintenanceVendorService.getList(loginUser, status));
+    }
+
+    @GetMapping("/{id}")
+    public ResponseEntity<?> detail(
+            @AuthenticationPrincipal LoginUser loginUser,
+            @PathVariable("id") Long id) {
+        return Resp.ok(maintenanceVendorService.getDetail(loginUser, id));
     }
 }

@@ -45,6 +45,7 @@ public class Maintenance {
    @JoinColumn(name = "vendor_id")
    private User vendor;
 
+
    /*
     * =======================
     * 기본 요청 정보

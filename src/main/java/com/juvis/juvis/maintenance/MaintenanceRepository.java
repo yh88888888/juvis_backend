@@ -97,15 +97,18 @@ public interface MaintenanceRepository extends JpaRepository<Maintenance, Long> 
   // ✅ HQ 요약: 상태별 count
   long countByStatus(MaintenanceStatus status);
 
-  long countByVendor_IdAndStatus(Integer vendorId, MaintenanceStatus status);
+  long countByVendor_IdAndStatus(Long vendorId, MaintenanceStatus status);
 
-  // ✅ vendor + status
-  List<Maintenance> findByVendorIdAndStatusOrderByCreatedAtDesc(Integer  vendorId, MaintenanceStatus status);
+  List<Maintenance> findByVendor_IdAndStatusOrderByCreatedAtDesc(
+      Long vendorId,
+      MaintenanceStatus status);
 
-  // ✅ vendor + status in
-  List<Maintenance> findByVendorIdAndStatusInOrderByCreatedAtDesc(Integer  vendorId,
+  List<Maintenance> findByVendor_IdAndStatusInOrderByCreatedAtDesc(
+      Long vendorId,
       Collection<MaintenanceStatus> statuses);
 
   // ✅ summary count
-  long countByVendorIdAndStatusIn(Integer  vendorId, Collection<MaintenanceStatus> statuses);
+  long countByVendorIdAndStatusIn(Integer vendorId, Collection<MaintenanceStatus> statuses);
+
+  Optional<Maintenance> findByIdAndVendor_Id(Long id, Integer vendorId);
 }
