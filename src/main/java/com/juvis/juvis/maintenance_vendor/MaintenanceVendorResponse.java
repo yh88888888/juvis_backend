@@ -15,6 +15,7 @@ public class MaintenanceVendorResponse {
     @AllArgsConstructor
     public static class SummaryDTO {
         private long estimating;       // 견적 제출 필요
+        private long hq2Rejected;       // 본사 견적 반려려
         private long approvalPending;  // 견적 제출(승인 대기)
         private long inProgress;       // 작업 중(결과 제출 필요)
         private long completed;        // 작업 완료

@@ -1,12 +1,10 @@
 package com.juvis.juvis.notification;
 
-import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -59,17 +57,19 @@ public class NotificationService {
         // =========================
         // 1️⃣ 본사(HQ) — 항상
         // =========================
-        targets.addAll(userRepository.findByRole(UserRole.HQ));
+        if (EnumSet.of(
+                MaintenanceStatus.REQUESTED, // 지점이 요청 제출했을 때 HQ가 봐야함
+                MaintenanceStatus.APPROVAL_PENDING, // 벤더가 견적 제출했을 때 HQ 2차 검토
+                MaintenanceStatus.COMPLETED // (원하면) 완료 보고를 HQ가 받게
+        ).contains(after)) {
+            targets.addAll(userRepository.findByRole(UserRole.HQ));
+        }
 
         // =========================
         // 2️⃣ 지점(요청자)
         // =========================
         if (m.getRequester() != null &&
-                EnumSet.of(
-                        MaintenanceStatus.APPROVAL_PENDING,
-                        MaintenanceStatus.IN_PROGRESS,
-                        MaintenanceStatus.COMPLETED,
-                        MaintenanceStatus.HQ1_REJECTED).contains(after)) {
+                EnumSet.of(MaintenanceStatus.HQ1_REJECTED).contains(after)) {
             targets.add(m.getRequester());
         }
 

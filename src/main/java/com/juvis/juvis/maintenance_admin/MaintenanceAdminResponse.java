@@ -17,6 +17,7 @@ public class MaintenanceAdminResponse {
         private long requested;
         private long estimating;
         private long approvalPending;
+        private long hq2Rejected;
         private long inProgress;
         private long completed;
     }

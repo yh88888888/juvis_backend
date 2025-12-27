@@ -32,11 +32,12 @@ public class MaintenanceAdminService {
         long requested = maintenanceRepository.countByStatus(MaintenanceStatus.REQUESTED);
         long estimating = maintenanceRepository.countByStatus(MaintenanceStatus.ESTIMATING);
         long approvalPending = maintenanceRepository.countByStatus(MaintenanceStatus.APPROVAL_PENDING);
+        long hq2Rejected = maintenanceRepository.countByStatus(MaintenanceStatus.HQ2_REJECTED);
         long inProgress = maintenanceRepository.countByStatus(MaintenanceStatus.IN_PROGRESS);
         long completed = maintenanceRepository.countByStatus(MaintenanceStatus.COMPLETED);
 
         return new MaintenanceAdminResponse.SummaryDTO(
-                requested, estimating, approvalPending, inProgress, completed
+                requested, estimating, approvalPending, hq2Rejected,inProgress, completed
         );
     }
 

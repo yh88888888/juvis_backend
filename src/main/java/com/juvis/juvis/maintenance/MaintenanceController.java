@@ -23,9 +23,11 @@ import com.juvis.juvis._core.util.Resp;
 import com.juvis.juvis.user.LoginUser;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 @RequiredArgsConstructor
 @RestController
+@Slf4j
 public class MaintenanceController {
     private final MaintenanceService maintenanceService;
 
@@ -104,7 +106,7 @@ public class MaintenanceController {
         return Resp.ok(dto);
     }
 
-     // ✅ HQ 1차 승인: REQUESTED -> ESTIMATING
+    // ✅ HQ 1차 승인: REQUESTED -> ESTIMATING
     @PostMapping("/api/hq/maintenance/requests/{id}/approve-request")
     public ResponseEntity<?> approveRequest(
             @AuthenticationPrincipal LoginUser currentUser,
@@ -118,6 +120,7 @@ public class MaintenanceController {
         Maintenance m = maintenanceService.approveRequest(currentUser, id, dto);
         return Resp.ok(new MaintenanceResponse.DetailDTO(m, java.util.List.of()));
     }
+
     // ✅ HQ 2차 승인: APPROVAL_PENDING -> IN_PROGRESS
     @PostMapping("/api/hq/maintenance/requests/{id}/approve-estimate")
     public ResponseEntity<?> approveEstimate(
@@ -148,7 +151,7 @@ public class MaintenanceController {
         return Resp.ok(new MaintenanceResponse.DetailDTO(m, java.util.List.of()));
     }
 
-// ✅ HQ 2차 반려: APPROVAL_PENDING -> HQ2_REJECTED
+    // ✅ HQ 2차 반려: APPROVAL_PENDING -> HQ2_REJECTED
     @PostMapping("/api/hq/maintenance/requests/{id}/reject-estimate")
     public ResponseEntity<?> rejectEstimate(
             @AuthenticationPrincipal LoginUser currentUser,
@@ -165,35 +168,49 @@ public class MaintenanceController {
     // ========================= VENDOR =========================
 
     @GetMapping("/api/vendor/maintenance/requests")
-public ResponseEntity<?> getRequestsForVendor(
+    public ResponseEntity<?> getRequestsForVendor(
+            @AuthenticationPrincipal LoginUser currentUser,
+            @RequestParam(name = "status", required = false) String status) {
+
+        if (currentUser.role() != UserRole.VENDOR) {
+            return Resp.forbidden("VENDOR 권한이 필요합니다.");
+        }
+
+        List<Maintenance> list = maintenanceService.findForVendor(currentUser, status);
+        List<MaintenanceResponse.SimpleDTO> resp = list.stream().map(MaintenanceResponse.SimpleDTO::new).toList();
+        return Resp.ok(resp);
+    }
+
+    @GetMapping("/api/vendor/maintenance/requests/{id}")
+    public ResponseEntity<?> getDetailForVendor(
+            @AuthenticationPrincipal LoginUser currentUser,
+            @PathVariable("id") Long id) {
+
+        if (currentUser.role() != UserRole.VENDOR) {
+            return Resp.forbidden("VENDOR 권한이 필요합니다.");
+        }
+
+        log.info("[SUBMIT_ESTIMATE] pathId={}", id);
+        Maintenance m = maintenanceService.findDetailOrThrow(id);
+        log.info("[SUBMIT_ESTIMATE] maintenance.id={} status={}", m.getId(), m.getStatus());
+        return Resp.ok(maintenanceService.toDetailDTO(m));
+    }
+
+    @PostMapping("/api/vendor/maintenance/requests/{id}/submit-estimate")
+public ResponseEntity<?> submitEstimate(
         @AuthenticationPrincipal LoginUser currentUser,
-        @RequestParam(name = "status", required = false) String status) {
+        @PathVariable("id") Long id,
+        @RequestBody MaintenanceRequest.SubmitEstimateDTO dto) {
 
     if (currentUser.role() != UserRole.VENDOR) {
         return Resp.forbidden("VENDOR 권한이 필요합니다.");
     }
 
-    List<Maintenance> list = maintenanceService.findForVendor(currentUser, status);
-    List<MaintenanceResponse.SimpleDTO> resp =
-            list.stream().map(MaintenanceResponse.SimpleDTO::new).toList();
-    return Resp.ok(resp);
+    maintenanceService.submitEstimate(currentUser, id, dto);
+
+    // ✅ 상세 DTO 만들지 말고 단순 OK 반환
+    return Resp.ok("OK");
 }
-
-    /**
-     * Vendor – 견적 제출 (ESTIMATING → APPROVAL_PENDING)
-     */
-    @PostMapping("/api/vendor/maintenance/requests/{id}/submit-estimate")
-    public ResponseEntity<?> submitEstimate(
-            @AuthenticationPrincipal LoginUser currentUser,
-            @PathVariable("id") Long id,
-            @RequestBody MaintenanceRequest.SubmitEstimateDTO dto) {
-        if (currentUser.role() != UserRole.VENDOR) {
-            return Resp.forbidden("VENDOR 권한이 필요합니다.");
-        }
-
-        Maintenance m = maintenanceService.submitEstimate(currentUser, id, dto);
-        return Resp.ok(maintenanceService.toDetailDTO(m));
-    }
 
     /**
      * Vendor – 현장 조치 완료 + 결과/사진 업로드 (IN_PROGRESS → COMPLETED)

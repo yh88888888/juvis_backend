@@ -123,8 +123,6 @@ public class MaintenanceService {
         changeStatusWithNotify(mr, MaintenanceStatus.REQUESTED);
         mr.setSubmittedAt(LocalDateTime.now());
 
-
-
         // ✅ 여기 추가
         mr.getBranch().getBranchName();
 
@@ -405,6 +403,8 @@ public class MaintenanceService {
         }
 
         Maintenance m = findByIdOrThrow(id);
+        log.info("[SUBMIT_ESTIMATE] hit id={} vendorUserId={} beforeStatus={} resubmitCount={}",
+                id, currentUser.id(), m.getStatus(), m.getEstimateResubmitCount());
 
         if (m.getStatus() == MaintenanceStatus.ESTIMATING) {
             // ok
@@ -429,6 +429,10 @@ public class MaintenanceService {
 
         m.setVendorSubmittedAt(LocalDateTime.now());
         changeStatusWithNotify(m, MaintenanceStatus.APPROVAL_PENDING);
+
+        log.info("[SUBMIT_ESTIMATE] done id={} afterStatus={} vendorSubmittedAt={}",
+                id, m.getStatus(), m.getVendorSubmittedAt());
+
         return m;
     }
 
@@ -456,10 +460,11 @@ public class MaintenanceService {
         return m;
     }
 
-private void changeStatusWithNotify(Maintenance m, MaintenanceStatus next) {
-    MaintenanceStatus before = m.getStatus();
-    if (before == next) return;         // ✅ 같은 상태면 아무것도 안 함 (중복 알림 1차 방지)
-    m.setStatus(next);
-    notificationService.notifyOnStatusChange(m, before, next);
-}
+    private void changeStatusWithNotify(Maintenance m, MaintenanceStatus next) {
+        MaintenanceStatus before = m.getStatus();
+        if (before == next)
+            return; // ✅ 같은 상태면 아무것도 안 함 (중복 알림 1차 방지)
+        m.setStatus(next);
+        notificationService.notifyOnStatusChange(m, before, next);
+    }
 }

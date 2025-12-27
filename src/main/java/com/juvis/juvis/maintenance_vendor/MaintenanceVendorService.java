@@ -37,6 +37,7 @@ public class MaintenanceVendorService {
     // Vendor가 보는 상태는 4개만 허용
     private static final EnumSet<MaintenanceStatus> VENDOR_VISIBLE = EnumSet.of(
             MaintenanceStatus.ESTIMATING,
+            MaintenanceStatus.HQ2_REJECTED,
             MaintenanceStatus.APPROVAL_PENDING,
             MaintenanceStatus.IN_PROGRESS,
             MaintenanceStatus.COMPLETED);
@@ -47,6 +48,7 @@ public class MaintenanceVendorService {
 
         long estimating = maintenanceRepository.countByVendor_IdAndStatus(
                 vendorId, MaintenanceStatus.ESTIMATING);
+        long hq2Rejected = maintenanceRepository.countByVendor_IdAndStatus(vendorId, MaintenanceStatus.HQ2_REJECTED);
         long approvalPending = maintenanceRepository.countByVendor_IdAndStatus(
                 vendorId, MaintenanceStatus.APPROVAL_PENDING);
         long inProgress = maintenanceRepository.countByVendor_IdAndStatus(
@@ -54,7 +56,7 @@ public class MaintenanceVendorService {
         long completed = maintenanceRepository.countByVendor_IdAndStatus(
                 vendorId, MaintenanceStatus.COMPLETED);
         return new MaintenanceVendorResponse.SummaryDTO(
-                estimating, approvalPending, inProgress, completed);
+                estimating, hq2Rejected, approvalPending, inProgress, completed);
     }
 
     public MaintenanceVendorResponse.ListDTO getList(LoginUser loginUser, String status) {

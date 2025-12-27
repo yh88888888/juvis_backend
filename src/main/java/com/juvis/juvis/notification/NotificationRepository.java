@@ -14,21 +14,21 @@ import com.juvis.juvis.user.User;
 
 public interface NotificationRepository extends JpaRepository<Notification, Long> {
 
-    List<Notification> findTop50ByUserOrderByCreatedAtDesc(User user);
+        List<Notification> findTop50ByUserOrderByCreatedAtDesc(User user);
 
-    long countByUserAndIsReadFalse(User user);
+        long countByUserAndIsReadFalse(User user);
 
-    Optional<Notification> findByIdAndUser(Long id, User user);
+        Optional<Notification> findByIdAndUser(Long id, User user);
 
-    boolean existsByUserAndMaintenanceAndStatusAndIsReadFalse(
-            User user, Maintenance maintenance, MaintenanceStatus status);
+        boolean existsByUserAndMaintenanceAndStatusAndIsReadFalse(
+                        User user, Maintenance maintenance, MaintenanceStatus status);
 
-    @Modifying(clearAutomatically = true, flushAutomatically = true)
-    @Query("""
-                update Notification n
-                   set n.isRead = true
-                 where n.user.id = :userId
-                   and n.isRead = false
-            """)
-    int markAllReadByUserId(@Param("userId") Integer userId);
+        @Modifying(clearAutomatically = true, flushAutomatically = true)
+        @Query("""
+                            update Notification n
+                               set n.isRead = true
+                             where n.user.id = :userId
+                               and n.isRead = false
+                        """)
+        int markAllReadByUserId(@Param("userId") Integer userId);
 }
