@@ -1,11 +1,14 @@
 package com.juvis.juvis._core.config;
 
-
 import com.juvis.juvis._core.error.Jwt401Handler;
 import com.juvis.juvis._core.error.Jwt403Handler;
 import com.juvis.juvis._core.filter.JwtAuthorizationFilter;
+
+import java.util.List;
+
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -13,6 +16,9 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 @Configuration
 public class SecurityConfig {
@@ -24,12 +30,17 @@ public class SecurityConfig {
 
     // 시큐리티 컨텍스트 홀더에 세션 저장할 때 사용하는 클래스
     @Bean
-    public AuthenticationManager authenticationManager(AuthenticationConfiguration authenticationConfiguration) throws Exception {
+    public AuthenticationManager authenticationManager(AuthenticationConfiguration authenticationConfiguration)
+            throws Exception {
         return authenticationConfiguration.getAuthenticationManager();
     }
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+
+        // ✅ CORS 먼저 켜기 (웹에서 localhost:63020 -> 8080 호출 허용)
+        http.cors(cors -> cors.configurationSource(corsConfigurationSource()));
+
         // 1. iframe 허용 -> mysql로 전환하면 삭제
         http.headers(headers -> headers
                 .frameOptions(frameOptions -> frameOptions.sameOrigin()));
@@ -55,22 +66,45 @@ public class SecurityConfig {
                 .accessDeniedHandler(new Jwt403Handler()));
 
         // /s/api/** : 인증 필요, /s/api/admin/** : ADMIN 권한 필요
-        http.authorizeHttpRequests(
-                authorize -> authorize
-                        // 공개 엔드포인트
-                        .requestMatchers("/api/auth/**").permitAll()
-                        .requestMatchers("/docs/**").permitAll()
-                        // 권한 필요
-                        .requestMatchers("/s/api/hq/**").hasRole("HQ")
-                        // 권한 필요
-                        .requestMatchers("/s/api/vendor/**").hasRole("VENDOR")
-                        // 인증 필요
-                        .requestMatchers("/s/api/**").authenticated()
-                        .anyRequest().permitAll()
-        );
+        http.authorizeHttpRequests(authorize -> authorize
+
+                // ✅ 프리플라이트(OPTIONS)는 무조건 허용 (웹에서 Failed to fetch 방지 핵심)
+                .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+
+                // ✅ 공개
+                .requestMatchers("/api/auth/**").permitAll()
+                .requestMatchers("/docs/**").permitAll()
+
+                // ✅ HQ / VENDOR 권한
+                .requestMatchers("/api/hq/**").hasRole("HQ")
+                .requestMatchers("/api/vendor/**").hasRole("VENDOR")
+
+                // ✅ 나머지 /api는 로그인(토큰) 필요
+                .requestMatchers("/api/**").authenticated()
+
+                // 그 외는 필요하면 열어두고, 아니면 막아도 됨
+                .anyRequest().permitAll());
 
         return http.build();
     }
 
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration config = new CorsConfiguration();
 
+        // ✅ flutter web dev server origin
+        config.setAllowedOrigins(List.of(
+                "http://localhost:63020",
+                "http://127.0.0.1:63020"
+        ));
+
+        config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+        config.setAllowedHeaders(List.of("*"));
+        config.setExposedHeaders(List.of("Authorization"));
+        config.setAllowCredentials(true);
+
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", config);
+        return source;
+    }
 }

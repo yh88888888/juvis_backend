@@ -52,7 +52,7 @@ public class MaintenanceController {
             @AuthenticationPrincipal LoginUser loginUser,
             @PathVariable("id") Long id) {
         maintenanceService.submitRequest(loginUser, id);
-        return Resp.ok("제출완료료");
+        return Resp.ok("제출완료");
     }
 
     @GetMapping("/api/branch/maintenances")

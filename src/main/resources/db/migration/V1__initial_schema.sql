@@ -48,20 +48,34 @@ CREATE TABLE user_tb (
   name       VARCHAR(100) NULL,                   -- 사용자 이름
   phone      VARCHAR(20)  NULL,                   -- 사용자 개인 휴대폰 번호
   address    VARCHAR(255) NULL,
-  role      ENUM('BRANCH','HQ','VENDOR') NOT NULL DEFAULT 'BRANCH',
-  is_active  BOOLEAN NOT NULL DEFAULT TRUE,       -- 활성/비활성
+  role       ENUM('BRANCH','HQ','VENDOR') NOT NULL DEFAULT 'BRANCH',
+
+  is_active  TINYINT(1) NOT NULL DEFAULT 1,       -- 활성/비활성
+
+  -- ✅ 초기 비밀번호(1234)로 생성/초기화된 계정이면 true
+  must_change_password TINYINT(1) NOT NULL DEFAULT 1,
+
+  -- ✅ 로그인 5회 실패 영구잠금용
+  login_fail_count INT NOT NULL DEFAULT 0,        -- 로그인 실패 횟수
+  account_locked   TINYINT(1) NOT NULL DEFAULT 0, -- 영구 잠금 여부(1이면 로그인 차단)
+
   branch_id  BIGINT UNSIGNED NULL,                -- BRANCH일 경우 지점 FK
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
   PRIMARY KEY (user_id),
   UNIQUE KEY uk_user_username (username),
   KEY idx_user_role (role),
   KEY idx_user_branch (branch_id),
+  KEY idx_user_must_change_password (must_change_password),
+
+  -- (선택) HQ에서 잠금 계정만 빠르게 필터링할 때 유용
+  KEY idx_user_account_locked (account_locked),
+
   CONSTRAINT fk_user_branch
     FOREIGN KEY (branch_id) REFERENCES branch(branch_id)
     ON UPDATE RESTRICT ON DELETE SET NULL
 ) ENGINE=InnoDB;
-
 
 -- 3) maintenance_request
 CREATE TABLE maintenance_request (

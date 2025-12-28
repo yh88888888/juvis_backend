@@ -106,8 +106,7 @@ public class MaintenanceResponse {
                 Maintenance m,
                 List<String> requestPhotoUrls,
                 List<String> resultPhotoUrls,
-                List<EstimateAttemptDTO> estimateAttempts
-        ) {
+                List<EstimateAttemptDTO> estimateAttempts) {
             this.id = m.getId();
 
             this.branchName = m.getBranch() != null ? m.getBranch().getBranchName() : null;
@@ -144,7 +143,8 @@ public class MaintenanceResponse {
 
             if (latest != null) {
                 String amt = latest.getEstimateAmount();
-                if (amt != null) amt = amt.trim();
+                if (amt != null)
+                    amt = amt.trim();
 
                 if (amt == null || amt.isEmpty()) {
                     this.estimateAmount = null;
@@ -183,7 +183,8 @@ public class MaintenanceResponse {
             this.requestApprovedAt = m.getRequestApprovedAt();
 
             // ✅ 2차 결정
-            this.estimateApprovedByName = m.getEstimateApprovedBy() != null ? m.getEstimateApprovedBy().getName() : null;
+            this.estimateApprovedByName = m.getEstimateApprovedBy() != null ? m.getEstimateApprovedBy().getName()
+                    : null;
             this.estimateApprovedAt = m.getEstimateApprovedAt();
 
             // ✅ 반려 사유
@@ -192,6 +193,35 @@ public class MaintenanceResponse {
 
             this.createdAt = m.getCreatedAt();
             this.submittedAt = m.getSubmittedAt();
+        }
+
+        public static DetailDTO forBranch(
+                Maintenance m,
+                List<String> requestPhotoUrls,
+                List<String> resultPhotoUrls,
+                List<EstimateAttemptDTO> attempts) {
+            DetailDTO dto = new DetailDTO(m, requestPhotoUrls, resultPhotoUrls, attempts);
+
+            // ❌ 견적/2차결정 완전 제거
+            dto.estimateAmount = null;
+            dto.estimateComment = null;
+            dto.estimateRejectedReason = null;
+            dto.estimateApprovedByName = null;
+            dto.estimateApprovedAt = null;
+            dto.vendorSubmittedAt = null;
+            dto.estimateResubmitCount = null;
+
+            // ✅ 업체 이름/전화번호는 지점에 표시 (견적 제출 업체 연락 목적)
+            // => 여기서는 절대 null로 지우지 않음
+
+            // ✅ 작업예정일만 "진행 이후"에 표시 (정책)
+            if (!(m.getStatus() == MaintenanceStatus.IN_PROGRESS
+                    || m.getStatus() == MaintenanceStatus.COMPLETED)) {
+                dto.workStartDate = null;
+                dto.workEndDate = null;
+            }
+
+            return dto;
         }
     }
 
@@ -221,8 +251,7 @@ public class MaintenanceResponse {
                     a.getHqDecision().name(),
                     a.getHqDecidedAt(),
                     a.getHqDecidedByName(),
-                    a.getHqRejectReason()
-            );
+                    a.getHqRejectReason());
         }
     }
 }

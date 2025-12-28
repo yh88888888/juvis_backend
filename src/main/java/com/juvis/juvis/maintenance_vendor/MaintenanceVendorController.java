@@ -32,6 +32,7 @@ public class MaintenanceVendorController {
     public ResponseEntity<?> list(
             @AuthenticationPrincipal LoginUser loginUser,
             @RequestParam(value = "status", required = false) String status) {
+        System.out.println("VENDOR LIST status param = " + status);
         return Resp.ok(maintenanceVendorService.getList(loginUser, status));
     }
 

@@ -21,20 +21,7 @@ public class AuthController {
 
     @PostMapping("/api/auth/login")
     public ResponseEntity<?> login(@Valid @RequestBody UserRequest.LoginDTO reqDTO, Errors errors) {
-
         var respDTO = userService.login(reqDTO);
-        return Resp.ok(respDTO);
-    }
-
-    /**
-     * HQ만 호출 가능한 "지점 + 지점계정 동시 생성" API
-     * 해운대점 / juvis_hw / 000-0000-0000 / 부산 해운대구 ... 이런 식으로 사용.
-     */
-    @PostMapping("/api/auth/branch-join")
-    public ResponseEntity<?> joinBranch(
-            @AuthenticationPrincipal User loginUser,
-            @Valid @RequestBody UserRequest.BranchJoinDTO reqDTO) {
-        var respDTO = userService.joinBranch(reqDTO, loginUser);
         return Resp.ok(respDTO);
     }
 
@@ -44,10 +31,13 @@ public class AuthController {
             throw new ExceptionApi401("인증 필요");
 
         UserResponse.MeDTO dto = new UserResponse.MeDTO(
-                user.getId(), // 네 User id 타입에 맞게 조정
+                user.getId(),
                 user.getUsername(),
-                user.getName(), // name 필드 없다면 제거
-                user.getRole().name());
+                user.getName(),
+                user.getRole().name(),
+                user.isMustChangePassword() // ✅ 핵심
+
+        );
 
         return Resp.ok(dto);
     }

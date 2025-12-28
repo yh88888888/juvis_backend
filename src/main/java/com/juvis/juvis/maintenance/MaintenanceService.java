@@ -159,8 +159,26 @@ public class MaintenanceService {
             throw new ExceptionApi403("열람 권한이 없습니다.");
         }
 
-        return toDetailDTO(mr);
+        return toBranchDetailDTO(mr);
     }
+
+public MaintenanceResponse.DetailDTO toBranchDetailDTO(Maintenance m) {
+
+    List<String> requestPhotoUrls = buildRequestPhotoUrls(m);
+    List<String> resultPhotoUrls = buildResultPhotoUrls(m);
+
+    // ✅ 지점은 견적 이력/본사2차결정(견적 승인/반려) 절대 비노출
+    // => attempts 비우면 프론트에서 견적 카드/본사 검토 카드가 생길 수 없음
+    List<MaintenanceResponse.EstimateAttemptDTO> attempts = List.of();
+
+    // ✅ DetailDTO 자체는 생성하되, "견적 영역"은 비우는 생성자를 따로 쓰자
+    return MaintenanceResponse.DetailDTO.forBranch(
+            m,
+            requestPhotoUrls,
+            resultPhotoUrls,
+            attempts
+    );
+}
 
     // ========================= 사진 분리 빌더 =========================
 
@@ -268,32 +286,56 @@ public class MaintenanceService {
 
     // HQ: 2차 승인 (APPROVAL_PENDING -> IN_PROGRESS)
     @Transactional
-    public void approveEstimate(Long maintenanceId, LoginUser loginUser) {
-        Maintenance m = maintenanceRepository.findById(maintenanceId)
-                .orElseThrow(() -> new ExceptionApi404("요청을 찾을 수 없습니다."));
+public void approveEstimate(Long maintenanceId, LoginUser loginUser) {
+    Maintenance m = maintenanceRepository.findById(maintenanceId)
+            .orElseThrow(() -> new ExceptionApi404("요청을 찾을 수 없습니다."));
 
-        if (m.getStatus() != MaintenanceStatus.APPROVAL_PENDING) {
-            throw new ExceptionApi400("승인 불가 상태입니다. status=" + m.getStatus());
-        }
-
-        var attempts = attemptRepository.findByMaintenance_IdOrderByAttemptNoAsc(m.getId());
-        if (attempts.isEmpty()) {
-            throw new ExceptionApi400("견적 데이터가 없습니다.");
-        }
-
-        var current = attempts.get(attempts.size() - 1);
-
-        current.approve(loginUser.username());
-        attemptRepository.save(current);
-
-        User hqUser = userRepository.findById(loginUser.id())
-                .orElseThrow(() -> new ExceptionApi400("승인자 정보를 찾을 수 없습니다."));
-
-        m.setEstimateApprovedBy(hqUser);
-        m.setEstimateApprovedAt(LocalDateTime.now());
-
-        m.setStatus(MaintenanceStatus.IN_PROGRESS);
+    if (m.getStatus() != MaintenanceStatus.APPROVAL_PENDING) {
+        throw new ExceptionApi400("승인 불가 상태입니다. status=" + m.getStatus());
     }
+
+    var attempts = attemptRepository.findByMaintenance_IdOrderByAttemptNoAsc(m.getId());
+    if (attempts.isEmpty()) {
+        throw new ExceptionApi400("견적 데이터가 없습니다.");
+    }
+
+    // ✅ 최신 attempt
+    var current = attempts.get(attempts.size() - 1);
+
+    // ✅ attempt 자체 승인 처리(감사 로그 성격)
+    current.approve(loginUser.username());
+    attemptRepository.save(current);
+
+    // ✅ 승인자(HQ) 기록 (레거시 필드)
+    User hqUser = userRepository.findById(loginUser.id())
+            .orElseThrow(() -> new ExceptionApi400("승인자 정보를 찾을 수 없습니다."));
+
+    m.setEstimateApprovedBy(hqUser);
+    m.setEstimateApprovedAt(LocalDateTime.now());
+
+    // ✅ [추천1] 작업예정일 확정 저장 (지점에서 attempts 숨겨도 일정 보이게)
+    // - null이면 그냥 null로 남음 (업체가 날짜를 안 넣은 케이스)
+    m.setWorkStartDate(current.getWorkStartDate());
+    m.setWorkEndDate(current.getWorkEndDate());
+
+    // (선택) 레거시 견적 필드도 유지/동기화하고 싶으면 같이 저장 가능
+    // - 지금은 지점에서 견적 금액/코멘트를 숨기므로 필수는 아님
+    // m.setEstimateComment(current.getEstimateComment());
+    // if (current.getEstimateAmount() != null) {
+    //     try {
+    //         m.setEstimateAmount(new BigDecimal(current.getEstimateAmount().replace(",", "").trim()));
+    //     } catch (Exception ignore) {
+    //         // 금액 포맷이 이상하면 레거시는 비워둠
+    //         m.setEstimateAmount(null);
+    //     }
+    // }
+
+    // ✅ 진행 상태로 전환
+    m.setStatus(MaintenanceStatus.IN_PROGRESS);
+
+    // ✅ 기존 반려 사유 초기화(있으면)
+    m.setEstimateRejectedReason(null);
+}
 
     // HQ: 1차 반려 (REQUESTED -> HQ1_REJECTED)
     @Transactional
@@ -389,53 +431,70 @@ public class MaintenanceService {
     }
 
     @Transactional
-    public void submitEstimate(
-            LoginUser loginUser,
-            Long maintenanceId,
-            MaintenanceRequest.SubmitEstimateDTO dto) {
+public void submitEstimate(
+        LoginUser loginUser,
+        Long maintenanceId,
+        MaintenanceRequest.SubmitEstimateDTO dto) {
 
-        if (loginUser == null || loginUser.role() != UserRole.VENDOR) {
-            throw new ExceptionApi403("Vendor 권한이 필요합니다.");
-        }
-
-        Maintenance m = maintenanceRepository.findById(maintenanceId)
-                .orElseThrow(() -> new ExceptionApi404("요청을 찾을 수 없습니다."));
-
-        if (m.getVendor() == null || !m.getVendor().getId().equals(loginUser.id())) {
-            throw new ExceptionApi403("본인에게 배정된 요청만 견적 제출이 가능합니다.");
-        }
-
-        int attemptNo;
-        if (m.getStatus() == MaintenanceStatus.ESTIMATING) {
-            attemptNo = 1;
-        } else if (m.getStatus() == MaintenanceStatus.HQ2_REJECTED
-                && m.getEstimateResubmitCount() == 0) {
-            attemptNo = 2;
-            m.setEstimateResubmitCount(1);
-        } else {
-            throw new ExceptionApi400("견적 제출 불가 상태입니다. status=" + m.getStatus());
-        }
-
-        attemptRepository.findByMaintenance_IdAndAttemptNo(m.getId(), attemptNo)
-                .ifPresent(a -> {
-                    throw new ExceptionApi400("이미 제출된 견적입니다. attemptNo=" + attemptNo);
-                });
-
-        LocalDateTime now = LocalDateTime.now();
-        MaintenanceEstimateAttempt attempt = MaintenanceEstimateAttempt.create(
-                m,
-                attemptNo,
-                dto.getEstimateAmount().toString(),
-                dto.getEstimateComment(),
-                dto.getWorkStartDate(),
-                dto.getWorkEndDate(),
-                now);
-        attemptRepository.save(attempt);
-
-        m.setStatus(MaintenanceStatus.APPROVAL_PENDING);
-        m.setVendorSubmittedAt(now);
-        m.setEstimateRejectedReason(null);
+    if (loginUser == null || loginUser.role() != UserRole.VENDOR) {
+        throw new ExceptionApi403("Vendor 권한이 필요합니다.");
     }
+
+    Maintenance m = maintenanceRepository.findById(maintenanceId)
+            .orElseThrow(() -> new ExceptionApi404("요청을 찾을 수 없습니다."));
+
+    if (m.getVendor() == null || !m.getVendor().getId().equals(loginUser.id())) {
+        throw new ExceptionApi403("본인에게 배정된 요청만 견적 제출이 가능합니다.");
+    }
+
+    // ✅ 상태 체크(큰 틀만)
+    boolean canSubmit =
+            m.getStatus() == MaintenanceStatus.ESTIMATING ||
+            (m.getStatus() == MaintenanceStatus.HQ2_REJECTED && m.getEstimateResubmitCount() == 0);
+
+    if (!canSubmit) {
+        throw new ExceptionApi400("견적 제출 불가 상태입니다. status=" + m.getStatus());
+    }
+
+    // ✅ attemptNo는 “DB에 있는 attempt 기반”으로 결정
+    List<MaintenanceEstimateAttempt> existing =
+            attemptRepository.findByMaintenance_IdOrderByAttemptNoAsc(m.getId());
+
+    int nextAttemptNo = existing.isEmpty() ? 1 : existing.get(existing.size() - 1).getAttemptNo() + 1;
+
+    if (nextAttemptNo > 2) {
+        throw new ExceptionApi400("재제출은 1회만 허용됩니다.");
+    }
+
+    // ✅ 안전장치(유니크 위반/중복 방지)
+    attemptRepository.findByMaintenance_IdAndAttemptNo(m.getId(), nextAttemptNo)
+            .ifPresent(a -> {
+                throw new ExceptionApi400("이미 제출된 견적입니다. attemptNo=" + nextAttemptNo);
+            });
+
+    LocalDateTime now = LocalDateTime.now();
+
+    MaintenanceEstimateAttempt attempt = MaintenanceEstimateAttempt.create(
+            m,
+            nextAttemptNo,
+            dto.getEstimateAmount().toString(),
+            dto.getEstimateComment(),
+            dto.getWorkStartDate(),
+            dto.getWorkEndDate(),
+            now
+    );
+
+    attemptRepository.save(attempt);
+
+    // ✅ 재제출 카운트는 “2차 저장 성공 후”에만
+    if (nextAttemptNo == 2) {
+        m.setEstimateResubmitCount(1);
+    }
+
+    m.setStatus(MaintenanceStatus.APPROVAL_PENDING);
+    m.setVendorSubmittedAt(now);
+    m.setEstimateRejectedReason(null);
+}
 
     @Transactional
     public MaintenanceResponse.DetailDTO completeWorkAndGetDetail(
