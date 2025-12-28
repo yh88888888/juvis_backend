@@ -117,23 +117,28 @@ public class MaintenanceController {
             return Resp.forbidden("HQ 권한이 필요합니다.");
         }
 
-        Maintenance m = maintenanceService.approveRequest(currentUser, id, dto);
-        return Resp.ok(new MaintenanceResponse.DetailDTO(m, java.util.List.of()));
+        maintenanceService.approveRequest(currentUser, id, dto);
+
+        // ✅ 변경 후 최신 상세 조회
+        Maintenance m = maintenanceService.findDetailOrThrow(id);
+        return Resp.ok(maintenanceService.toDetailDTO(m));
     }
 
     // ✅ HQ 2차 승인: APPROVAL_PENDING -> IN_PROGRESS
     @PostMapping("/api/hq/maintenance/requests/{id}/approve-estimate")
     public ResponseEntity<?> approveEstimate(
             @AuthenticationPrincipal LoginUser currentUser,
-            @PathVariable("id") Long id,
-            @RequestBody(required = false) MaintenanceRequest.ApproveDTO dto) {
+            @PathVariable("id") Long id) {
 
         if (currentUser.role() != UserRole.HQ) {
             return Resp.forbidden("HQ 권한이 필요합니다.");
         }
 
-        Maintenance m = maintenanceService.approveEstimate(currentUser, id, dto);
-        return Resp.ok(new MaintenanceResponse.DetailDTO(m, java.util.List.of()));
+        maintenanceService.approveEstimate(id, currentUser);
+
+        // ✅ 변경 후 최신 상세 조회
+        Maintenance m = maintenanceService.findDetailOrThrow(id);
+        return Resp.ok(maintenanceService.toDetailDTO(m));
     }
 
     // ✅ HQ 1차 반려: REQUESTED -> HQ1_REJECTED
@@ -147,11 +152,14 @@ public class MaintenanceController {
             return Resp.forbidden("HQ 권한이 필요합니다.");
         }
 
-        Maintenance m = maintenanceService.rejectRequest(currentUser, id, dto);
-        return Resp.ok(new MaintenanceResponse.DetailDTO(m, java.util.List.of()));
+        maintenanceService.rejectRequest(currentUser, id, dto);
+
+        // ✅ 변경 후 최신 상세 조회
+        Maintenance m = maintenanceService.findDetailOrThrow(id);
+        return Resp.ok(maintenanceService.toDetailDTO(m));
     }
 
-    // ✅ HQ 2차 반려: APPROVAL_PENDING -> HQ2_REJECTED
+    // ✅ HQ 2차 반려: APPROVAL_PENDING -> HQ2_REJECTED / ESTIMATE_FINAL_REJECTED
     @PostMapping("/api/hq/maintenance/requests/{id}/reject-estimate")
     public ResponseEntity<?> rejectEstimate(
             @AuthenticationPrincipal LoginUser currentUser,
@@ -162,8 +170,11 @@ public class MaintenanceController {
             return Resp.forbidden("HQ 권한이 필요합니다.");
         }
 
-        Maintenance m = maintenanceService.rejectEstimate(currentUser, id, dto);
-        return Resp.ok(new MaintenanceResponse.DetailDTO(m, java.util.List.of()));
+        maintenanceService.rejectEstimate(id, currentUser, dto.getReason());
+
+        // ✅ 변경 후 최신 상세 조회
+        Maintenance m = maintenanceService.findDetailOrThrow(id);
+        return Resp.ok(maintenanceService.toDetailDTO(m));
     }
     // ========================= VENDOR =========================
 
@@ -197,34 +208,31 @@ public class MaintenanceController {
     }
 
     @PostMapping("/api/vendor/maintenance/requests/{id}/submit-estimate")
-public ResponseEntity<?> submitEstimate(
+    public ResponseEntity<?> submitEstimate(
+            @AuthenticationPrincipal LoginUser currentUser,
+            @PathVariable("id") Long id,
+            @RequestBody MaintenanceRequest.SubmitEstimateDTO dto) {
+
+        if (currentUser.role() != UserRole.VENDOR) {
+            return Resp.forbidden("VENDOR 권한이 필요합니다.");
+        }
+
+        maintenanceService.submitEstimate(currentUser, id, dto);
+
+        // ✅ 상세 DTO 만들지 말고 단순 OK 반환
+        return Resp.ok("OK");
+    }
+
+    @PostMapping("/api/vendor/maintenance/requests/{id}/complete")
+public ResponseEntity<?> completeWork(
         @AuthenticationPrincipal LoginUser currentUser,
         @PathVariable("id") Long id,
-        @RequestBody MaintenanceRequest.SubmitEstimateDTO dto) {
+        @RequestBody MaintenanceRequest.CompleteWorkDTO dto) {
 
     if (currentUser.role() != UserRole.VENDOR) {
         return Resp.forbidden("VENDOR 권한이 필요합니다.");
     }
 
-    maintenanceService.submitEstimate(currentUser, id, dto);
-
-    // ✅ 상세 DTO 만들지 말고 단순 OK 반환
-    return Resp.ok("OK");
+    return Resp.ok(maintenanceService.completeWorkAndGetDetail(currentUser, id, dto));
 }
-
-    /**
-     * Vendor – 현장 조치 완료 + 결과/사진 업로드 (IN_PROGRESS → COMPLETED)
-     */
-    @PostMapping("/api/vendor/maintenance/requests/{id}/complete")
-    public ResponseEntity<?> completeWork(
-            @AuthenticationPrincipal LoginUser currentUser,
-            @PathVariable("id") Long id,
-            @RequestBody MaintenanceRequest.CompleteWorkDTO dto) {
-        if (currentUser.role() != UserRole.VENDOR) {
-            return Resp.forbidden("VENDOR 권한이 필요합니다.");
-        }
-
-        Maintenance m = maintenanceService.completeWork(currentUser, id, dto);
-        return Resp.ok(maintenanceService.toDetailDTO(m));
-    }
 }

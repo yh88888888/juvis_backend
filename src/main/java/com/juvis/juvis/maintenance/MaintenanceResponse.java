@@ -59,7 +59,11 @@ public class MaintenanceResponse {
         public String category;
         public String categoryName;
 
-        private List<String> attachPhotoUrls;
+        // ✅ 요청 첨부(지점 업로드)
+        private List<String> requestPhotoUrls;
+
+        // ✅ 완료 사진(벤더 작업완료 업로드)
+        private List<String> resultPhotoUrls;
 
         // Vendor
         private String vendorName;
@@ -70,12 +74,16 @@ public class MaintenanceResponse {
         private String estimateComment;
         private LocalDate workStartDate;
         private LocalDate workEndDate;
+        private List<EstimateAttemptDTO> estimateAttempts;
 
         private Integer estimateResubmitCount;
 
         // 결과
         private String resultComment;
+
+        // (레거시) 단일 결과사진 URL - 기존 화면/코드 호환용으로 유지
         private String resultPhotoUrl;
+
         private LocalDateTime workCompletedAt;
 
         // ✅ 1차 결정(승인/반려 공통)
@@ -94,7 +102,12 @@ public class MaintenanceResponse {
         private LocalDateTime submittedAt;
         private LocalDateTime vendorSubmittedAt;
 
-        public DetailDTO(Maintenance m, List<String> attachPhotoUrls) {
+        public DetailDTO(
+                Maintenance m,
+                List<String> requestPhotoUrls,
+                List<String> resultPhotoUrls,
+                List<EstimateAttemptDTO> estimateAttempts
+        ) {
             this.id = m.getId();
 
             this.branchName = m.getBranch() != null ? m.getBranch().getBranchName() : null;
@@ -109,37 +122,107 @@ public class MaintenanceResponse {
             this.category = m.getCategory().name();
             this.categoryName = m.getCategory().getDisplayName();
 
-            this.attachPhotoUrls = attachPhotoUrls;
+            // ✅ 분리된 사진 리스트
+            this.requestPhotoUrls = (requestPhotoUrls == null) ? java.util.List.of() : requestPhotoUrls;
+            this.resultPhotoUrls = (resultPhotoUrls == null) ? java.util.List.of() : resultPhotoUrls;
 
             if (m.getVendor() != null) {
                 this.vendorName = m.getVendor().getName();
                 this.vendorPhone = m.getVendor().getPhone();
             }
 
-            this.estimateAmount = m.getEstimateAmount();
-            this.estimateComment = m.getEstimateComment();
-            this.workStartDate = m.getWorkStartDate();
-            this.workEndDate = m.getWorkEndDate();
+            // ✅ attempts 세팅 (null 방지)
+            this.estimateAttempts = (estimateAttempts == null) ? java.util.List.of() : estimateAttempts;
+
+            // =========================================================
+            // ✅ 단일 견적 필드는 "항상 최신 attempt 기준"으로 채움
+            // =========================================================
+            EstimateAttemptDTO latest = null;
+            if (this.estimateAttempts != null && !this.estimateAttempts.isEmpty()) {
+                latest = this.estimateAttempts.get(this.estimateAttempts.size() - 1);
+            }
+
+            if (latest != null) {
+                String amt = latest.getEstimateAmount();
+                if (amt != null) amt = amt.trim();
+
+                if (amt == null || amt.isEmpty()) {
+                    this.estimateAmount = null;
+                } else {
+                    this.estimateAmount = new java.math.BigDecimal(amt.replace(",", ""));
+                }
+
+                this.estimateComment = latest.getEstimateComment();
+                this.workStartDate = latest.getWorkStartDate();
+                this.workEndDate = latest.getWorkEndDate();
+                this.vendorSubmittedAt = latest.getVendorSubmittedAt();
+
+            } else {
+                this.estimateAmount = m.getEstimateAmount();
+                this.estimateComment = m.getEstimateComment();
+                this.workStartDate = m.getWorkStartDate();
+                this.workEndDate = m.getWorkEndDate();
+                this.vendorSubmittedAt = m.getVendorSubmittedAt();
+            }
 
             this.estimateResubmitCount = m.getEstimateResubmitCount();
 
+            // 결과
             this.resultComment = m.getResultComment();
-            this.resultPhotoUrl = m.getResultPhotoUrl();
             this.workCompletedAt = m.getWorkCompletedAt();
 
+            // ✅ 레거시 단일 URL은 "resultPhotoUrls 첫 번째" 우선, 없으면 엔티티 fallback
+            if (this.resultPhotoUrls != null && !this.resultPhotoUrls.isEmpty()) {
+                this.resultPhotoUrl = this.resultPhotoUrls.get(0);
+            } else {
+                this.resultPhotoUrl = m.getResultPhotoUrl();
+            }
+
+            // ✅ 1차 결정
             this.requestApprovedByName = m.getRequestApprovedBy() != null ? m.getRequestApprovedBy().getName() : null;
             this.requestApprovedAt = m.getRequestApprovedAt();
 
-            this.estimateApprovedByName = m.getEstimateApprovedBy() != null ? m.getEstimateApprovedBy().getName()
-                    : null;
+            // ✅ 2차 결정
+            this.estimateApprovedByName = m.getEstimateApprovedBy() != null ? m.getEstimateApprovedBy().getName() : null;
             this.estimateApprovedAt = m.getEstimateApprovedAt();
 
+            // ✅ 반려 사유
             this.requestRejectedReason = m.getRequestRejectedReason();
             this.estimateRejectedReason = m.getEstimateRejectedReason();
 
             this.createdAt = m.getCreatedAt();
             this.submittedAt = m.getSubmittedAt();
-            this.vendorSubmittedAt = m.getVendorSubmittedAt();
+        }
+    }
+
+    @Getter
+    @AllArgsConstructor
+    public static class EstimateAttemptDTO {
+        private int attemptNo;
+        private String estimateAmount;
+        private String estimateComment;
+        private LocalDate workStartDate;
+        private LocalDate workEndDate;
+        private LocalDateTime vendorSubmittedAt;
+
+        private String hqDecision; // PENDING / APPROVED / REJECTED
+        private LocalDateTime hqDecidedAt;
+        private String hqDecidedByName;
+        private String hqRejectReason;
+
+        public static EstimateAttemptDTO from(com.juvis.juvis.maintenance_estimate.MaintenanceEstimateAttempt a) {
+            return new EstimateAttemptDTO(
+                    a.getAttemptNo(),
+                    a.getEstimateAmount(),
+                    a.getEstimateComment(),
+                    a.getWorkStartDate(),
+                    a.getWorkEndDate(),
+                    a.getVendorSubmittedAt(),
+                    a.getHqDecision().name(),
+                    a.getHqDecidedAt(),
+                    a.getHqDecidedByName(),
+                    a.getHqRejectReason()
+            );
         }
     }
 }

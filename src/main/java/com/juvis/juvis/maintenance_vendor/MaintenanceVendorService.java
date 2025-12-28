@@ -7,7 +7,7 @@ import com.juvis.juvis._core.error.ex.ExceptionApi404;
 import com.juvis.juvis.maintenance.Maintenance;
 import com.juvis.juvis.maintenance.MaintenanceRepository;
 import com.juvis.juvis.maintenance.MaintenanceResponse;
-import com.juvis.juvis.maintenance_photo.MaintenancePhoto;
+import com.juvis.juvis.maintenance.MaintenanceService;
 import com.juvis.juvis.maintenance_photo.MaintenancePhotoRepository;
 import com.juvis.juvis.user.LoginUser;
 import com.juvis.juvis.maintenance_photo.PresignService;
@@ -25,8 +25,7 @@ import java.util.List;
 public class MaintenanceVendorService {
 
     private final MaintenanceRepository maintenanceRepository;
-    private final MaintenancePhotoRepository maintenancePhotoRepository;
-    private final PresignService presignService;
+    private final MaintenanceService maintenanceService;
 
     private void requireVendor(LoginUser loginUser) {
         if (loginUser == null || loginUser.role() != UserRole.VENDOR) {
@@ -91,28 +90,8 @@ public class MaintenanceVendorService {
                 .findByIdAndVendor_Id(id, vendorId)
                 .orElseThrow(() -> new ExceptionApi404("요청을 찾을 수 없습니다."));
 
-        return toDetailDTO(m);
+        return maintenanceService.toDetailDTO(m);
     }
 
-    private List<String> buildAttachPhotoUrls(Maintenance m) {
-        if (m == null || m.getId() == null)
-            return List.of();
 
-        List<MaintenancePhoto> photos = maintenancePhotoRepository.findByMaintenanceId(m.getId());
-
-        if (photos == null || photos.isEmpty())
-            return List.of();
-
-        return photos.stream()
-                .map(MaintenancePhoto::getFileKey)
-                .map(presignService::presignedGetUrl)
-                .filter(java.util.Objects::nonNull)
-                .toList();
-    }
-
-    public MaintenanceResponse.DetailDTO toDetailDTO(Maintenance m) {
-        return new MaintenanceResponse.DetailDTO(
-                m,
-                buildAttachPhotoUrls(m));
-    }
 }

@@ -28,16 +28,16 @@ public class MaintenancePhotoService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ExceptionApi404("유저 없음"));
 
-        // 권한 체크 예시(지점 기준)
         if (!m.getBranch().getId().equals(user.getBranch().getId())) {
             throw new ExceptionApi403("권한 없음");
         }
 
-        MaintenancePhoto photo = MaintenancePhoto.builder()
-                .maintenance(m)
-                .fileKey(dto.getFileKey())
-                .publicUrl(dto.getPublicUrl())
-                .build();
+        MaintenancePhoto photo = MaintenancePhoto.of(
+                m,
+                dto.getFileKey(),
+                dto.getPublicUrl(),
+                MaintenancePhoto.PhotoType.REQUEST // ✅ 지점 요청 첨부
+        );
 
         photoRepository.save(photo);
     }

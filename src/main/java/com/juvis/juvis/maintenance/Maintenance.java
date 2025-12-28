@@ -5,8 +5,10 @@ import com.juvis.juvis._core.enums.MaintenanceStatus;
 import com.juvis.juvis.branch.Branch;
 import com.juvis.juvis.maintenance_photo.MaintenancePhoto;
 import com.juvis.juvis.user.User;
+
 import jakarta.persistence.*;
 import lombok.*;
+
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
@@ -45,7 +47,6 @@ public class Maintenance {
    @JoinColumn(name = "vendor_id")
    private User vendor;
 
-
    /*
     * =======================
     * 기본 요청 정보
@@ -65,6 +66,13 @@ public class Maintenance {
    @Column(nullable = false, length = 30)
    private MaintenanceCategory category;
 
+   /**
+    * ⚠️ 주의:
+    * - 사진은 응답에서 requestPhotoUrls / resultPhotoUrls 로 분리해서 내려주기 때문에
+    * - 엔티티에서 이 컬렉션을 직접 attach/result로 혼용하지 않도록 "레거시/참조용"으로만 두는 것을 권장
+    *
+    * (실제 분리는 서비스에서 MaintenancePhotoRepository로 조회 후 필터/분리)
+    */
    @OneToMany(mappedBy = "maintenance", cascade = CascadeType.ALL, orphanRemoval = true)
    @OrderBy("id ASC")
    private List<MaintenancePhoto> photos = new ArrayList<>();
@@ -99,6 +107,7 @@ public class Maintenance {
    @Column(name = "result_comment")
    private String resultComment;
 
+   // (레거시) 단일 결과사진 URL - 다중 결과사진은 maintenance_photo로 관리
    @Column(name = "result_photo_url")
    private String resultPhotoUrl;
 
@@ -107,7 +116,7 @@ public class Maintenance {
 
    /*
     * =======================
-    * ✅ 반려 사유(1차/2차 분리)
+    * 반려 사유(1차/2차 분리)
     * =======================
     */
    @Column(name = "request_rejected_reason", length = 500)
@@ -118,7 +127,7 @@ public class Maintenance {
 
    /*
     * =======================
-    * ✅ 결정 기록(승인/반려 공통, 1차/2차 분리)
+    * 결정 기록(승인/반려 공통, 1차/2차 분리)
     * =======================
     */
    @ManyToOne(fetch = FetchType.LAZY)

@@ -177,6 +177,28 @@ CREATE TABLE estimate (
     ON UPDATE RESTRICT ON DELETE RESTRICT
 ) ENGINE=InnoDB;
 
+CREATE TABLE maintenance_estimate_attempt (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    maintenance_id BIGINT NOT NULL,
+    attempt_no INT NOT NULL, -- 1 or 2
+
+    estimate_amount VARCHAR(50) NOT NULL,
+    estimate_comment TEXT NULL,
+    work_start_date DATE NULL,
+    work_end_date DATE NULL,
+    vendor_submitted_at DATETIME NOT NULL,
+
+    hq_decision VARCHAR(20) NOT NULL DEFAULT 'PENDING', -- PENDING/APPROVED/REJECTED
+    hq_decided_at DATETIME NULL,
+    hq_decided_by_name VARCHAR(100) NULL,
+    hq_reject_reason TEXT NULL,
+
+    created_at DATETIME NOT NULL DEFAULT NOW(),
+
+    CONSTRAINT uk_maintenance_attempt UNIQUE (maintenance_id, attempt_no),
+    INDEX idx_maintenance_attempt_mid (maintenance_id)
+) ENGINE=InnoDB;
+
 -- 5) work_order
 CREATE TABLE work_order (
   work_id     BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -201,15 +223,28 @@ CREATE TABLE work_order (
 ) ENGINE=InnoDB;
 
 -- 6) Photo attachment
-create table maintenance_photo (
-  id bigint unsigned auto_increment primary key,
-  maintenance_id bigint unsigned not null,
-  file_key varchar(255) not null,
-  public_url varchar(500) not null,
-  constraint fk_maintenance_photo_maintenance
-    foreign key (maintenance_id)
-    references maintenance_request (request_id)
-) engine=InnoDB;
+CREATE TABLE maintenance_photo (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+
+  maintenance_id BIGINT UNSIGNED NOT NULL,
+
+  file_key VARCHAR(255) NOT NULL,
+  public_url VARCHAR(500) NOT NULL,
+
+  -- ✅ 추가: 사진 용도 구분
+  photo_type VARCHAR(20) NOT NULL COMMENT 'REQUEST(지점첨부) / RESULT(완료사진)',
+
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+  CONSTRAINT fk_maintenance_photo_maintenance
+    FOREIGN KEY (maintenance_id)
+    REFERENCES maintenance_request (request_id)
+    ON DELETE CASCADE,
+
+  -- ✅ 조회 최적화 인덱스 (상세에서 type별로 뽑을 거라 필수)
+  INDEX idx_maintenance_photo_maintenance_id (maintenance_id),
+  INDEX idx_maintenance_photo_maintenance_type (maintenance_id, photo_type)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 7) comment
 CREATE TABLE comment (

@@ -59,8 +59,15 @@ public class MaintenanceRequest {
     @Getter
     @Setter
     public static class CompleteWorkDTO {
-        private String resultComment;
-        private String resultPhotoUrl;
-        private LocalDate actualEndDate;
+        private String resultComment; // 필수
+        private LocalDate actualEndDate; // 선택 (원하면 안 써도 됨)
+        private List<ResultPhotoDTO> resultPhotos; // ✅ 핵심
+
+        @Getter
+        @Setter
+        public static class ResultPhotoDTO {
+            private String fileKey;
+            private String publicUrl;
+        }
     }
 }
