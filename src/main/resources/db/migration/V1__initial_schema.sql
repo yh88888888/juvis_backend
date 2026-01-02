@@ -114,8 +114,12 @@ CREATE TABLE maintenance_request (
   work_end_date           DATE         NULL,
   estimate_resubmit_count INT NOT NULL DEFAULT 0,
 
+  -- ✅ HQ1 승인 코멘트 (여기 쉼표!)
+  request_approved_comment VARCHAR(500) NULL,
+
   -- ✅ 1차 반려 사유
   request_rejected_reason  VARCHAR(500) NULL,
+
   -- ✅ 2차 반려 사유
   estimate_rejected_reason VARCHAR(500) NULL,
 

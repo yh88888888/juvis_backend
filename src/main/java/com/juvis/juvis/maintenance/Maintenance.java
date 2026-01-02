@@ -114,6 +114,9 @@ public class Maintenance {
    @Column(name = "work_completed_at")
    private LocalDateTime workCompletedAt;
 
+   @Column(name = "request_approved_comment", length = 500)
+   private String requestApprovedComment;
+
    /*
     * =======================
     * 반려 사유(1차/2차 분리)

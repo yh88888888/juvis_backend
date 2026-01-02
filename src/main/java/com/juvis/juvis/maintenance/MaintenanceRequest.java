@@ -38,7 +38,7 @@ public class MaintenanceRequest {
     @Getter
     @Setter
     public static class ApproveDTO {
-        // 필요시 확장
+        private String comment; // ✅ HQ1 승인 코멘트(선택)
     }
 
     @Getter
