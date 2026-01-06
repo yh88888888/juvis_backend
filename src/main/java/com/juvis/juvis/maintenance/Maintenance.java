@@ -98,6 +98,8 @@ public class Maintenance {
    @Column(name = "estimate_resubmit_count", nullable = false)
    private int estimateResubmitCount;
 
+   @Column(name = "vendor_worker_id")
+   private Long vendorWorkerId;
    /*
     * =======================
     * 작업 결과

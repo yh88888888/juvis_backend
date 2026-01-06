@@ -7,5 +7,6 @@ import java.util.Optional;
 
 public interface MaintenanceEstimateAttemptRepository extends JpaRepository<MaintenanceEstimateAttempt, Long> {
     List<MaintenanceEstimateAttempt> findByMaintenance_IdOrderByAttemptNoAsc(Long maintenanceId);
+
     Optional<MaintenanceEstimateAttempt> findByMaintenance_IdAndAttemptNo(Long maintenanceId, int attemptNo);
 }

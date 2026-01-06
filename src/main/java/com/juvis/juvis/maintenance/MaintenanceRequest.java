@@ -54,6 +54,17 @@ public class MaintenanceRequest {
         private String estimateComment;
         private LocalDate workStartDate;
         private LocalDate workEndDate;
+
+        // ✅ 추가
+        private List<EstimatePhotoDTO> estimatePhotos;
+        private Long vendorWorkerId;
+
+        @Getter
+        @Setter
+        public static class EstimatePhotoDTO {
+            private String fileKey;
+            private String publicUrl;
+        }
     }
 
     @Getter

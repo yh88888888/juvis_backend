@@ -2,6 +2,7 @@ package com.juvis.juvis.maintenance;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
@@ -26,6 +27,8 @@ import com.juvis.juvis.notification.NotificationService;
 import com.juvis.juvis.user.LoginUser;
 import com.juvis.juvis.user.User;
 import com.juvis.juvis.user.UserRepository;
+import com.juvis.juvis.vendor_worker.VendorWorker;
+import com.juvis.juvis.vendor_worker.VendorWorkerRepository;
 
 import lombok.extern.slf4j.Slf4j;
 import lombok.RequiredArgsConstructor;
@@ -42,6 +45,7 @@ public class MaintenanceService {
     private final PresignService presignService;
     private final NotificationService notificationService;
     private final MaintenanceEstimateAttemptRepository attemptRepository;
+    private final VendorWorkerRepository vendorWorkerRepository;
 
     // ---------- 공통 로더 ----------
     private User loadUser(LoginUser loginUser) {
@@ -186,7 +190,7 @@ public class MaintenanceService {
                 .findByMaintenanceIdAndPhotoType(m.getId(), MaintenancePhoto.PhotoType.REQUEST)
                 .stream()
                 .map(MaintenancePhoto::getFileKey)
-                .map(presignService::presignedGetUrl) // ✅ 핵심: GET presign으로 viewUrl 생성
+                .map(presignService::presignedGetUrl) // ✅ GET presign으로 viewUrl
                 .filter(u -> u != null && !u.isBlank())
                 .toList();
     }
@@ -196,9 +200,24 @@ public class MaintenanceService {
                 .findByMaintenanceIdAndPhotoType(m.getId(), MaintenancePhoto.PhotoType.RESULT)
                 .stream()
                 .map(MaintenancePhoto::getFileKey)
-                .map(presignService::presignedGetUrl) // ✅ 핵심
+                .map(presignService::presignedGetUrl)
                 .filter(u -> u != null && !u.isBlank())
                 .toList();
+    }
+
+    // ✅ 추가: 견적 사진(ESTIMATE) attemptNo별로 URL을 그룹핑
+    private Map<Integer, List<String>> buildEstimatePhotoUrlsByAttempt(Maintenance m) {
+        return maintenancePhotoRepository
+                .findByMaintenanceIdAndPhotoTypeOrderByIdAsc(m.getId(), MaintenancePhoto.PhotoType.ESTIMATE)
+                .stream()
+                .filter(p -> p.getAttemptNo() != null)
+                .collect(Collectors.groupingBy(
+                        MaintenancePhoto::getAttemptNo,
+                        Collectors.mapping(
+                                // ✅ 너는 RESULT/REQUEST처럼 fileKey를 presignedGetUrl로 바꿔서 보여주고 있음
+                                // ESTIMATE도 동일하게 맞춰야 프론트에서 바로 Image.network 가능
+                                p -> presignService.presignedGetUrl(p.getFileKey()),
+                                Collectors.toList())));
     }
 
     // ✅ 상세 DTO
@@ -207,10 +226,15 @@ public class MaintenanceService {
         List<String> requestPhotoUrls = buildRequestPhotoUrls(m);
         List<String> resultPhotoUrls = buildResultPhotoUrls(m);
 
+        // ✅ attemptNo별 견적 사진 URL 준비
+        Map<Integer, List<String>> estimatePhotoUrlsByAttempt = buildEstimatePhotoUrlsByAttempt(m);
+
         List<MaintenanceResponse.EstimateAttemptDTO> attempts = attemptRepository
                 .findByMaintenance_IdOrderByAttemptNoAsc(m.getId())
                 .stream()
-                .map(MaintenanceResponse.EstimateAttemptDTO::from)
+                .map(a -> MaintenanceResponse.EstimateAttemptDTO.from(
+                        a,
+                        estimatePhotoUrlsByAttempt.getOrDefault(a.getAttemptNo(), List.of())))
                 .toList();
 
         return new MaintenanceResponse.DetailDTO(
@@ -440,18 +464,21 @@ public class MaintenanceService {
             Long maintenanceId,
             MaintenanceRequest.SubmitEstimateDTO dto) {
 
+        // 1) 권한 체크
         if (loginUser == null || loginUser.role() != UserRole.VENDOR) {
             throw new ExceptionApi403("Vendor 권한이 필요합니다.");
         }
 
+        // 2) Maintenance 조회
         Maintenance m = maintenanceRepository.findById(maintenanceId)
                 .orElseThrow(() -> new ExceptionApi404("요청을 찾을 수 없습니다."));
 
+        // 3) 본인 vendor 요청인지 확인
         if (m.getVendor() == null || !m.getVendor().getId().equals(loginUser.id())) {
             throw new ExceptionApi403("본인에게 배정된 요청만 견적 제출이 가능합니다.");
         }
 
-        // ✅ 상태 체크(큰 틀만)
+        // 4) 상태 체크
         boolean canSubmit = m.getStatus() == MaintenanceStatus.ESTIMATING ||
                 (m.getStatus() == MaintenanceStatus.HQ2_REJECTED && m.getEstimateResubmitCount() == 0);
 
@@ -459,24 +486,49 @@ public class MaintenanceService {
             throw new ExceptionApi400("견적 제출 불가 상태입니다. status=" + m.getStatus());
         }
 
-        // ✅ attemptNo는 “DB에 있는 attempt 기반”으로 결정
+        // 5) attemptNo 결정 (DB 기반)
         List<MaintenanceEstimateAttempt> existing = attemptRepository
                 .findByMaintenance_IdOrderByAttemptNoAsc(m.getId());
 
-        int nextAttemptNo = existing.isEmpty() ? 1 : existing.get(existing.size() - 1).getAttemptNo() + 1;
+        int nextAttemptNo = existing.isEmpty()
+                ? 1
+                : existing.get(existing.size() - 1).getAttemptNo() + 1;
 
         if (nextAttemptNo > 2) {
             throw new ExceptionApi400("재제출은 1회만 허용됩니다.");
         }
 
-        // ✅ 안전장치(유니크 위반/중복 방지)
+        // 6) 안전장치(중복 제출 방지)
         attemptRepository.findByMaintenance_IdAndAttemptNo(m.getId(), nextAttemptNo)
                 .ifPresent(a -> {
                     throw new ExceptionApi400("이미 제출된 견적입니다. attemptNo=" + nextAttemptNo);
                 });
 
+        // 7) 필수값 검증(금액)
+        if (dto.getEstimateAmount() == null) {
+            throw new ExceptionApi400("estimateAmount는 필수입니다.");
+        }
+
         LocalDateTime now = LocalDateTime.now();
 
+        // =========================
+        // 7-1) ✅ 작업자 선택 검증 및 반영
+        // =========================
+        if (dto.getVendorWorkerId() != null) {
+
+            VendorWorker worker = vendorWorkerRepository
+                    .findByIdAndVendorIdAndIsActiveTrue(
+                            dto.getVendorWorkerId(),
+                            loginUser.id().longValue())
+                    .orElseThrow(() -> new ExceptionApi400("유효하지 않은 작업자입니다."));
+
+            m.setVendorWorkerId(worker.getId());
+
+        } else {
+            m.setVendorWorkerId(null);
+        }
+
+        // 8) attempt 저장
         MaintenanceEstimateAttempt attempt = MaintenanceEstimateAttempt.create(
                 m,
                 nextAttemptNo,
@@ -488,14 +540,51 @@ public class MaintenanceService {
 
         attemptRepository.save(attempt);
 
-        // ✅ 재제출 카운트는 “2차 저장 성공 후”에만
+        // =========================
+        // 9) ✅ 견적 사진 메타 저장 (핵심)
+        // - 업로드는 이미 프론트에서 S3 PUT 완료
+        // - 여기서는 fileKey/publicUrl만 DB에 저장
+        // - attemptNo를 함께 저장해서 1차/2차 사진이 섞이지 않게 함
+        // =========================
+        if (dto.getEstimatePhotos() != null && !dto.getEstimatePhotos().isEmpty()) {
+
+            // (선택) 들어온 값 필터링
+            List<MaintenanceRequest.SubmitEstimateDTO.EstimatePhotoDTO> valid = dto.getEstimatePhotos().stream()
+                    .filter(p -> p.getFileKey() != null && !p.getFileKey().trim().isEmpty())
+                    .filter(p -> p.getPublicUrl() != null && !p.getPublicUrl().trim().isEmpty())
+                    .toList();
+
+            if (!valid.isEmpty()) {
+
+                // ✅ 꼬임 방지 포인트:
+                maintenancePhotoRepository.deleteByMaintenanceIdAndPhotoTypeAndAttemptNo(
+                        m.getId(),
+                        MaintenancePhoto.PhotoType.ESTIMATE,
+                        nextAttemptNo);
+
+                List<MaintenancePhoto> photos = valid.stream()
+                        .map(p -> MaintenancePhoto.ofEstimate(
+                                m,
+                                p.getFileKey().trim(),
+                                p.getPublicUrl().trim(),
+                                nextAttemptNo))
+                        .toList();
+
+                maintenancePhotoRepository.saveAll(photos);
+            }
+        }
+
+        // 10) 재제출 카운트는 “2차 저장 성공 후”에만
         if (nextAttemptNo == 2) {
             m.setEstimateResubmitCount(1);
         }
 
+        // 11) 상태/타임스탬프 갱신
         m.setStatus(MaintenanceStatus.APPROVAL_PENDING);
         m.setVendorSubmittedAt(now);
         m.setEstimateRejectedReason(null);
+
+        // ✅ m은 영속 상태라 save() 없어도 커밋 시점에 반영됨
     }
 
     @Transactional
