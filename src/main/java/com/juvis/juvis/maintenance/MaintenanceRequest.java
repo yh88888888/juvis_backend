@@ -57,7 +57,7 @@ public class MaintenanceRequest {
 
         // ✅ 추가
         private List<EstimatePhotoDTO> estimatePhotos;
-        private Long vendorWorkerId;
+        private Long workerId;
 
         @Getter
         @Setter

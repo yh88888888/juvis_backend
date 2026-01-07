@@ -218,6 +218,12 @@ CREATE TABLE maintenance_estimate_attempt (
 
   vendor_submitted_at DATETIME NOT NULL,
 
+  -- ✅ 작업자 스냅샷(선택)
+  worker_id BIGINT UNSIGNED NULL,
+  worker_team_label VARCHAR(50) NULL,
+  worker_name VARCHAR(100) NULL,
+  worker_phone VARCHAR(50) NULL,
+
   hq_decision VARCHAR(20) NOT NULL DEFAULT 'PENDING', -- PENDING/APPROVED/REJECTED
   hq_decided_at DATETIME NULL,
   hq_decided_by_name VARCHAR(100) NULL,
@@ -237,7 +243,11 @@ CREATE TABLE maintenance_estimate_attempt (
 
   INDEX idx_mea_mid (maintenance_id),
   INDEX idx_mea_mid_attempt (maintenance_id, attempt_no),
-  INDEX idx_mea_hq_decision (hq_decision)
+  INDEX idx_mea_hq_decision (hq_decision),
+
+  -- ✅ 작업자 조회/필터 대비(선택)
+  INDEX idx_mea_worker_id (worker_id)
+
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 5) work_order

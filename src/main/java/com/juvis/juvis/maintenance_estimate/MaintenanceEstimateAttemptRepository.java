@@ -9,4 +9,6 @@ public interface MaintenanceEstimateAttemptRepository extends JpaRepository<Main
     List<MaintenanceEstimateAttempt> findByMaintenance_IdOrderByAttemptNoAsc(Long maintenanceId);
 
     Optional<MaintenanceEstimateAttempt> findByMaintenance_IdAndAttemptNo(Long maintenanceId, int attemptNo);
+
+    Optional<MaintenanceEstimateAttempt> findTopByMaintenance_IdOrderByAttemptNoDesc(Long maintenanceId);
 }

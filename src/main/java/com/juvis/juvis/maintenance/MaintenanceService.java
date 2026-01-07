@@ -168,22 +168,42 @@ public class MaintenanceService {
 
     public MaintenanceResponse.DetailDTO toBranchDetailDTO(Maintenance m) {
 
-        List<String> requestPhotoUrls = buildRequestPhotoUrls(m);
-        List<String> resultPhotoUrls = buildResultPhotoUrls(m);
+    List<String> requestPhotoUrls = buildRequestPhotoUrls(m);
+    List<String> resultPhotoUrls = buildResultPhotoUrls(m);
 
-        // ✅ 지점은 견적 이력/본사2차결정(견적 승인/반려) 절대 비노출
-        // => attempts 비우면 프론트에서 견적 카드/본사 검토 카드가 생길 수 없음
-        List<MaintenanceResponse.EstimateAttemptDTO> attempts = List.of();
+    // ✅ 최신 attempt 1건만 DTO로 만들기 (worker 채우기 목적)
+    MaintenanceResponse.EstimateAttemptDTO latestAttempt = findLatestAttemptDto(m.getId());
 
-        // ✅ DetailDTO 자체는 생성하되, "견적 영역"은 비우는 생성자를 따로 쓰자
-        return MaintenanceResponse.DetailDTO.forBranch(
-                m,
-                requestPhotoUrls,
-                resultPhotoUrls,
-                attempts);
-    }
+    List<MaintenanceResponse.EstimateAttemptDTO> attemptsForWorker =
+            (latestAttempt == null) ? List.of() : List.of(latestAttempt);
+
+    // ✅ forBranch 내부에서 estimateAttempts를 비워서 반환하도록 처리됨
+    return MaintenanceResponse.DetailDTO.forBranch(
+            m,
+            requestPhotoUrls,
+            resultPhotoUrls,
+            attemptsForWorker
+    );
+}
 
     // ========================= 사진 분리 빌더 =========================
+    private MaintenanceResponse.EstimateAttemptDTO findLatestAttemptDto(Long maintenanceId) {
+
+        // ✅ 최신 attempt 엔티티 1건 조회
+        MaintenanceEstimateAttempt latest = attemptRepository
+                .findTopByMaintenance_IdOrderByAttemptNoDesc(maintenanceId)
+                .orElse(null);
+
+        if (latest == null)
+            return null;
+
+        // ✅ 견적 사진 URL 매핑(이미 너 서비스에 있는 함수 재사용)
+        // 최신 attemptNo의 사진만 꺼내서 DTO에 넣어줌 (사실 지점은 attempts를 숨길 거라 필수는 아님)
+        Map<Integer, List<String>> photoUrlsByAttempt = buildEstimatePhotoUrlsByAttempt(latest.getMaintenance());
+        List<String> urls = photoUrlsByAttempt.getOrDefault(latest.getAttemptNo(), List.of());
+
+        return MaintenanceResponse.EstimateAttemptDTO.from(latest, urls);
+    }
 
     private List<String> buildRequestPhotoUrls(Maintenance m) {
         return maintenancePhotoRepository
@@ -514,21 +534,22 @@ public class MaintenanceService {
         // =========================
         // 7-1) ✅ 작업자 선택 검증 및 반영
         // =========================
-        if (dto.getVendorWorkerId() != null) {
+        // (견적 제출 서비스 메서드 내부) - 해당 블록 교체
 
-            VendorWorker worker = vendorWorkerRepository
+        VendorWorker worker = null;
+
+        if (dto.getWorkerId() != null) {
+            worker = vendorWorkerRepository
                     .findByIdAndVendorIdAndIsActiveTrue(
-                            dto.getVendorWorkerId(),
+                            dto.getWorkerId(),
                             loginUser.id().longValue())
                     .orElseThrow(() -> new ExceptionApi400("유효하지 않은 작업자입니다."));
 
-            m.setVendorWorkerId(worker.getId());
-
+            m.setVendorWorkerId(worker.getId()); // 유지하고 싶으면 OK
         } else {
             m.setVendorWorkerId(null);
         }
 
-        // 8) attempt 저장
         MaintenanceEstimateAttempt attempt = MaintenanceEstimateAttempt.create(
                 m,
                 nextAttemptNo,
@@ -538,8 +559,10 @@ public class MaintenanceService {
                 dto.getWorkEndDate(),
                 now);
 
-        attemptRepository.save(attempt);
+        // ✅ 스냅샷 저장
+        attempt.setWorkerSnapshot(worker);
 
+        attemptRepository.save(attempt);
         // =========================
         // 9) ✅ 견적 사진 메타 저장 (핵심)
         // - 업로드는 이미 프론트에서 S3 PUT 완료

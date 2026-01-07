@@ -81,6 +81,11 @@ public class MaintenanceResponse {
 
         private Integer estimateResubmitCount;
 
+        // ✅ 담당 작업자(최신 attempt 기준으로 내려줌)
+        private String workerName;
+        private String workerPhone;
+        private String workerTeamLabel;
+
         // 결과
         private String resultComment;
 
@@ -111,6 +116,7 @@ public class MaintenanceResponse {
                 List<String> requestPhotoUrls,
                 List<String> resultPhotoUrls,
                 List<EstimateAttemptDTO> estimateAttempts) {
+
             this.id = m.getId();
 
             this.branchName = m.getBranch() != null ? m.getBranch().getBranchName() : null;
@@ -138,7 +144,7 @@ public class MaintenanceResponse {
             this.estimateAttempts = (estimateAttempts == null) ? java.util.List.of() : estimateAttempts;
 
             // =========================================================
-            // ✅ 단일 견적 필드는 "항상 최신 attempt 기준"으로 채움
+            // ✅ 단일 견적/작업자 필드는 "항상 최신 attempt 기준"으로 채움
             // =========================================================
             EstimateAttemptDTO latest = null;
             if (this.estimateAttempts != null && !this.estimateAttempts.isEmpty()) {
@@ -161,12 +167,23 @@ public class MaintenanceResponse {
                 this.workEndDate = latest.getWorkEndDate();
                 this.vendorSubmittedAt = latest.getVendorSubmittedAt();
 
+                // ✅✅✅ 최신 attempt의 작업자 정보도 같이 내려줌
+                // (EstimateAttemptDTO에 workerName/Phone/TeamLabel이 있어야 함)
+                this.workerName = latest.getWorkerName();
+                this.workerPhone = latest.getWorkerPhone();
+                this.workerTeamLabel = latest.getWorkerTeamLabel();
+
             } else {
                 this.estimateAmount = m.getEstimateAmount();
                 this.estimateComment = m.getEstimateComment();
                 this.workStartDate = m.getWorkStartDate();
                 this.workEndDate = m.getWorkEndDate();
                 this.vendorSubmittedAt = m.getVendorSubmittedAt();
+
+                // ✅ attempt가 없으면 작업자 정보도 없음
+                this.workerName = null;
+                this.workerPhone = null;
+                this.workerTeamLabel = null;
             }
 
             this.estimateResubmitCount = m.getEstimateResubmitCount();
@@ -186,7 +203,7 @@ public class MaintenanceResponse {
             this.requestApprovedByName = m.getRequestApprovedBy() != null ? m.getRequestApprovedBy().getName() : null;
             this.requestApprovedAt = m.getRequestApprovedAt();
 
-            // ✅✅✅ 여기 추가: HQ1 승인 코멘트 매핑
+            // ✅ HQ1 승인 코멘트
             this.requestApprovedComment = m.getRequestApprovedComment();
 
             // ✅ 2차 결정
@@ -208,7 +225,11 @@ public class MaintenanceResponse {
                 List<String> requestPhotoUrls,
                 List<String> resultPhotoUrls,
                 List<EstimateAttemptDTO> attempts) {
+
             DetailDTO dto = new DetailDTO(m, requestPhotoUrls, resultPhotoUrls, attempts);
+
+            // ✅ 지점에는 견적 이력 비노출 (하지만 workerName/phone은 이미 채워짐)
+            dto.estimateAttempts = java.util.List.of();
 
             // ❌ 견적/2차결정 완전 제거
             dto.estimateAmount = null;
@@ -229,6 +250,9 @@ public class MaintenanceResponse {
                 dto.workEndDate = null;
             }
 
+            // ✅ 지점에서도 "담당 작업자 연락처"는 보여주려면 유지 (지우지 않음)
+            // dto.workerName / workerPhone / workerTeamLabel 그대로 유지
+
             return dto;
         }
     }
@@ -245,6 +269,10 @@ public class MaintenanceResponse {
         private LocalDate workStartDate;
         private LocalDate workEndDate;
         private LocalDateTime vendorSubmittedAt;
+
+        private String workerTeamLabel;
+        private String workerName;
+        private String workerPhone;
 
         // ✅ 추가: attempt별 견적 사진 URL
         private List<String> estimatePhotoUrls = List.of();
@@ -268,6 +296,9 @@ public class MaintenanceResponse {
             dto.setWorkStartDate(a.getWorkStartDate());
             dto.setWorkEndDate(a.getWorkEndDate());
             dto.setVendorSubmittedAt(a.getVendorSubmittedAt());
+            dto.setWorkerTeamLabel(a.getWorkerTeamLabel());
+            dto.setWorkerName(a.getWorkerName());
+            dto.setWorkerPhone(a.getWorkerPhone());
 
             dto.setEstimatePhotoUrls(
                     estimatePhotoUrls == null ? List.of() : estimatePhotoUrls);
