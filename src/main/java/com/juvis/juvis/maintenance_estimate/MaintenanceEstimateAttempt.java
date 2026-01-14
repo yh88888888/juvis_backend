@@ -10,8 +10,13 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "maintenance_estimate_attempt", uniqueConstraints = @UniqueConstraint(name = "uk_maintenance_attempt", columnNames = {
-        "maintenance_id", "attempt_no" }))
+@Table(
+    name = "maintenance_estimate_attempt",
+    uniqueConstraints = @UniqueConstraint(
+        name = "uk_maintenance_attempt",
+        columnNames = {"maintenance_id", "attempt_no"}
+    )
+)
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor
@@ -89,27 +94,46 @@ public class MaintenanceEstimateAttempt {
         this.workerPhone = w.getPhone();
     }
 
+    /** ✅ 견적 수정(영속 엔티티 수정용) */
+    public void updateEstimate(
+            String amount,
+            String comment,
+            LocalDate start,
+            LocalDate end,
+            VendorWorker worker,
+            LocalDateTime submittedAt
+    ) {
+        this.estimateAmount = amount;
+        this.estimateComment = comment;
+        this.workStartDate = start;
+        this.workEndDate = end;
+        this.vendorSubmittedAt = submittedAt;
+
+        // ✅ 작업자 스냅샷 갱신
+        setWorkerSnapshot(worker);
+    }
+
     public static MaintenanceEstimateAttempt create(
-        Maintenance m,
-        int attemptNo,
-        String amount,
-        String comment,
-        LocalDate start,
-        LocalDate end,
-        LocalDateTime submittedAt
-) {
-    return MaintenanceEstimateAttempt.builder()
-            .maintenance(m)
-            .attemptNo(attemptNo)
-            .estimateAmount(amount)
-            .estimateComment(comment)
-            .workStartDate(start)
-            .workEndDate(end)
-            .vendorSubmittedAt(submittedAt)
-            .hqDecision(HqDecision.PENDING)
-            .createdAt(LocalDateTime.now())
-            .build();
-}
+            Maintenance m,
+            int attemptNo,
+            String amount,
+            String comment,
+            LocalDate start,
+            LocalDate end,
+            LocalDateTime submittedAt
+    ) {
+        return MaintenanceEstimateAttempt.builder()
+                .maintenance(m)
+                .attemptNo(attemptNo)
+                .estimateAmount(amount)
+                .estimateComment(comment)
+                .workStartDate(start)
+                .workEndDate(end)
+                .vendorSubmittedAt(submittedAt)
+                .hqDecision(HqDecision.PENDING)
+                .createdAt(LocalDateTime.now())
+                .build();
+    }
 
     public void approve(String hqName) {
         this.hqDecision = HqDecision.APPROVED;

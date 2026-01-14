@@ -12,6 +12,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -223,16 +224,34 @@ public class MaintenanceController {
         return Resp.ok("OK");
     }
 
-    @PostMapping("/api/vendor/maintenance/requests/{id}/complete")
-public ResponseEntity<?> completeWork(
-        @AuthenticationPrincipal LoginUser currentUser,
-        @PathVariable("id") Long id,
-        @RequestBody MaintenanceRequest.CompleteWorkDTO dto) {
-
-    if (currentUser.role() != UserRole.VENDOR) {
-        return Resp.forbidden("VENDOR 권한이 필요합니다.");
+    @PutMapping("/api/vendor/maintenance/requests/{id}/estimate")
+    public ResponseEntity<Resp<Void>> updateEstimate(
+            @AuthenticationPrincipal LoginUser loginUser,
+            @PathVariable("id") Long id,
+            @RequestBody MaintenanceRequest.SubmitEstimateDTO dto) {
+        maintenanceService.updateEstimate(loginUser, id, dto);
+        return Resp.ok(null);
     }
 
-    return Resp.ok(maintenanceService.completeWorkAndGetDetail(currentUser, id, dto));
-}
+    @PutMapping("/api/vendor/maintenance/requests/{id}/edit-estimate")
+    public ResponseEntity<Resp<Void>> editEstimate(
+            @AuthenticationPrincipal LoginUser loginUser,
+            @PathVariable("id") Long id,
+            @RequestBody MaintenanceRequest.UpdateEstimateDTO dto) {
+        maintenanceService.editEstimate(loginUser, id, dto);
+        return Resp.ok(null);
+    }
+
+    @PostMapping("/api/vendor/maintenance/requests/{id}/complete")
+    public ResponseEntity<?> completeWork(
+            @AuthenticationPrincipal LoginUser currentUser,
+            @PathVariable("id") Long id,
+            @RequestBody MaintenanceRequest.CompleteWorkDTO dto) {
+
+        if (currentUser.role() != UserRole.VENDOR) {
+            return Resp.forbidden("VENDOR 권한이 필요합니다.");
+        }
+
+        return Resp.ok(maintenanceService.completeWorkAndGetDetail(currentUser, id, dto));
+    }
 }

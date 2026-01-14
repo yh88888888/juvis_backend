@@ -168,23 +168,22 @@ public class MaintenanceService {
 
     public MaintenanceResponse.DetailDTO toBranchDetailDTO(Maintenance m) {
 
-    List<String> requestPhotoUrls = buildRequestPhotoUrls(m);
-    List<String> resultPhotoUrls = buildResultPhotoUrls(m);
+        List<String> requestPhotoUrls = buildRequestPhotoUrls(m);
+        List<String> resultPhotoUrls = buildResultPhotoUrls(m);
 
-    // ✅ 최신 attempt 1건만 DTO로 만들기 (worker 채우기 목적)
-    MaintenanceResponse.EstimateAttemptDTO latestAttempt = findLatestAttemptDto(m.getId());
+        // ✅ 최신 attempt 1건만 DTO로 만들기 (worker 채우기 목적)
+        MaintenanceResponse.EstimateAttemptDTO latestAttempt = findLatestAttemptDto(m.getId());
 
-    List<MaintenanceResponse.EstimateAttemptDTO> attemptsForWorker =
-            (latestAttempt == null) ? List.of() : List.of(latestAttempt);
+        List<MaintenanceResponse.EstimateAttemptDTO> attemptsForWorker = (latestAttempt == null) ? List.of()
+                : List.of(latestAttempt);
 
-    // ✅ forBranch 내부에서 estimateAttempts를 비워서 반환하도록 처리됨
-    return MaintenanceResponse.DetailDTO.forBranch(
-            m,
-            requestPhotoUrls,
-            resultPhotoUrls,
-            attemptsForWorker
-    );
-}
+        // ✅ forBranch 내부에서 estimateAttempts를 비워서 반환하도록 처리됨
+        return MaintenanceResponse.DetailDTO.forBranch(
+                m,
+                requestPhotoUrls,
+                resultPhotoUrls,
+                attemptsForWorker);
+    }
 
     // ========================= 사진 분리 빌더 =========================
     private MaintenanceResponse.EstimateAttemptDTO findLatestAttemptDto(Long maintenanceId) {
@@ -234,9 +233,23 @@ public class MaintenanceService {
                 .collect(Collectors.groupingBy(
                         MaintenancePhoto::getAttemptNo,
                         Collectors.mapping(
-                                // ✅ 너는 RESULT/REQUEST처럼 fileKey를 presignedGetUrl로 바꿔서 보여주고 있음
-                                // ESTIMATE도 동일하게 맞춰야 프론트에서 바로 Image.network 가능
                                 p -> presignService.presignedGetUrl(p.getFileKey()),
+                                Collectors.toList())));
+    }
+
+    private Map<Integer, List<MaintenanceResponse.EstimateAttemptDTO.EstimatePhotoDTO>> buildEstimatePhotosByAttempt(
+            Maintenance m) {
+
+        return maintenancePhotoRepository
+                .findByMaintenanceIdAndPhotoTypeOrderByIdAsc(m.getId(), MaintenancePhoto.PhotoType.ESTIMATE)
+                .stream()
+                .filter(p -> p.getAttemptNo() != null)
+                .collect(Collectors.groupingBy(
+                        MaintenancePhoto::getAttemptNo,
+                        Collectors.mapping(
+                                p -> new MaintenanceResponse.EstimateAttemptDTO.EstimatePhotoDTO(
+                                        p.getFileKey(),
+                                        presignService.presignedGetUrl(p.getFileKey())),
                                 Collectors.toList())));
     }
 
@@ -246,15 +259,20 @@ public class MaintenanceService {
         List<String> requestPhotoUrls = buildRequestPhotoUrls(m);
         List<String> resultPhotoUrls = buildResultPhotoUrls(m);
 
-        // ✅ attemptNo별 견적 사진 URL 준비
+        // ✅ 기존 유지
         Map<Integer, List<String>> estimatePhotoUrlsByAttempt = buildEstimatePhotoUrlsByAttempt(m);
+
+        // ✅ 신규 추가
+        Map<Integer, List<MaintenanceResponse.EstimateAttemptDTO.EstimatePhotoDTO>> estimatePhotosByAttempt = buildEstimatePhotosByAttempt(
+                m);
 
         List<MaintenanceResponse.EstimateAttemptDTO> attempts = attemptRepository
                 .findByMaintenance_IdOrderByAttemptNoAsc(m.getId())
                 .stream()
                 .map(a -> MaintenanceResponse.EstimateAttemptDTO.from(
                         a,
-                        estimatePhotoUrlsByAttempt.getOrDefault(a.getAttemptNo(), List.of())))
+                        estimatePhotoUrlsByAttempt.getOrDefault(a.getAttemptNo(), List.of()),
+                        estimatePhotosByAttempt.getOrDefault(a.getAttemptNo(), List.of())))
                 .toList();
 
         return new MaintenanceResponse.DetailDTO(
@@ -379,7 +397,7 @@ public class MaintenanceService {
         // }
 
         // ✅ 진행 상태로 전환
-        m.setStatus(MaintenanceStatus.IN_PROGRESS);
+        changeStatusWithNotify(m, MaintenanceStatus.IN_PROGRESS);
 
         // ✅ 기존 반려 사유 초기화(있으면)
         m.setEstimateRejectedReason(null);
@@ -431,10 +449,10 @@ public class MaintenanceService {
         attemptRepository.save(current);
 
         if (current.getAttemptNo() == 1) {
-            m.setStatus(MaintenanceStatus.HQ2_REJECTED);
+            changeStatusWithNotify(m, MaintenanceStatus.HQ2_REJECTED);
             m.setEstimateRejectedReason(reason);
         } else if (current.getAttemptNo() == 2) {
-            m.setStatus(MaintenanceStatus.ESTIMATE_FINAL_REJECTED);
+            changeStatusWithNotify(m, MaintenanceStatus.ESTIMATE_FINAL_REJECTED);
             m.setEstimateRejectedReason(reason);
         } else {
             throw new ExceptionApi400("잘못된 attemptNo=" + current.getAttemptNo());
@@ -603,11 +621,210 @@ public class MaintenanceService {
         }
 
         // 11) 상태/타임스탬프 갱신
-        m.setStatus(MaintenanceStatus.APPROVAL_PENDING);
+        changeStatusWithNotify(m, MaintenanceStatus.APPROVAL_PENDING);
         m.setVendorSubmittedAt(now);
         m.setEstimateRejectedReason(null);
 
         // ✅ m은 영속 상태라 save() 없어도 커밋 시점에 반영됨
+    }
+
+    @Transactional
+    public void updateEstimate(LoginUser loginUser, Long maintenanceId, MaintenanceRequest.SubmitEstimateDTO dto) {
+
+        if (loginUser == null || loginUser.role() != UserRole.VENDOR) {
+            throw new ExceptionApi403("Vendor 권한이 필요합니다.");
+        }
+
+        Maintenance m = maintenanceRepository.findById(maintenanceId)
+                .orElseThrow(() -> new ExceptionApi404("요청을 찾을 수 없습니다."));
+
+        if (m.getVendor() == null || !m.getVendor().getId().equals(loginUser.id())) {
+            throw new ExceptionApi403("본인에게 배정된 요청만 수정 가능합니다.");
+        }
+
+        if (m.getStatus() != MaintenanceStatus.APPROVAL_PENDING) {
+            throw new ExceptionApi400("APPROVAL_PENDING 상태에서만 수정 가능합니다. status=" + m.getStatus());
+        }
+
+        List<MaintenanceEstimateAttempt> attempts = attemptRepository
+                .findByMaintenance_IdOrderByAttemptNoAsc(m.getId());
+
+        if (attempts.isEmpty()) {
+            throw new ExceptionApi400("수정할 견적이 없습니다.");
+        }
+
+        MaintenanceEstimateAttempt latest = attempts.get(attempts.size() - 1);
+
+        if (latest.getHqDecision() != MaintenanceEstimateAttempt.HqDecision.PENDING) {
+            throw new ExceptionApi400("HQ 결정 이후에는 수정할 수 없습니다. decision=" + latest.getHqDecision());
+        }
+
+        // 필수값 검증
+        if (dto.getEstimateAmount() == null) {
+            throw new ExceptionApi400("estimateAmount는 필수입니다.");
+        }
+
+        // ✅ 작업자 검증 + 스냅샷 갱신
+        VendorWorker worker = null;
+        if (dto.getWorkerId() != null) {
+            worker = vendorWorkerRepository
+                    .findByIdAndVendorIdAndIsActiveTrue(dto.getWorkerId(), loginUser.id().longValue())
+                    .orElseThrow(() -> new ExceptionApi400("유효하지 않은 작업자입니다."));
+            m.setVendorWorkerId(worker.getId());
+        } else {
+            m.setVendorWorkerId(null);
+        }
+
+        // ✅ attempt 업데이트
+        latest.setWorkerSnapshot(worker);
+
+        // amount/comment/date 갱신 (setter가 없다면 entity에 setter 추가하거나 @Setter 일부 허용)
+        latest.updateEstimate(
+                dto.getEstimateAmount().toString().trim(),
+                dto.getEstimateComment(),
+                dto.getWorkStartDate(),
+                dto.getWorkEndDate(),
+                worker, // VendorWorker (없으면 null)
+                LocalDateTime.now());
+
+        attemptRepository.save(latest);
+
+        // ✅ 사진 갱신(해당 attemptNo만)
+        int attemptNo = latest.getAttemptNo();
+
+        maintenancePhotoRepository.deleteByMaintenanceIdAndPhotoTypeAndAttemptNo(
+                m.getId(),
+                MaintenancePhoto.PhotoType.ESTIMATE,
+                attemptNo);
+
+        if (dto.getEstimatePhotos() != null && !dto.getEstimatePhotos().isEmpty()) {
+            List<MaintenanceRequest.SubmitEstimateDTO.EstimatePhotoDTO> valid = dto.getEstimatePhotos().stream()
+                    .filter(p -> p.getFileKey() != null && !p.getFileKey().trim().isEmpty())
+                    .filter(p -> p.getPublicUrl() != null && !p.getPublicUrl().trim().isEmpty())
+                    .toList();
+
+            List<MaintenancePhoto> photos = valid.stream()
+                    .map(p -> MaintenancePhoto.ofEstimate(
+                            m,
+                            p.getFileKey().trim(),
+                            p.getPublicUrl().trim(),
+                            attemptNo))
+                    .toList();
+
+            maintenancePhotoRepository.saveAll(photos);
+        }
+
+        // ✅ maintenance의 vendorSubmittedAt도 갱신(선택이지만 UX상 깔끔)
+        m.setVendorSubmittedAt(LocalDateTime.now());
+        // =========================================================
+        // ✅ [추가] 견적 수정 알림 발생 (상태 변화가 없으므로 별도 이벤트)
+        // - NotificationService에 notifyOnEstimateUpdated(Maintenance m)만 구현해주면 됨
+        // =========================================================
+        notificationService.notifyEstimateUpdated(m);
+    }
+
+    @Transactional
+    public void editEstimate(LoginUser loginUser, Long maintenanceId, MaintenanceRequest.UpdateEstimateDTO dto) {
+
+        if (loginUser == null || loginUser.role() != UserRole.VENDOR) {
+            throw new ExceptionApi403("Vendor 권한이 필요합니다.");
+        }
+
+        Maintenance m = maintenanceRepository.findById(maintenanceId)
+                .orElseThrow(() -> new ExceptionApi404("요청을 찾을 수 없습니다."));
+
+        if (m.getVendor() == null || !Objects.equals(m.getVendor().getId(), loginUser.id())) {
+            throw new ExceptionApi403("본인에게 배정된 요청만 수정 가능합니다.");
+        }
+
+        // ✅ 승인/반려 전(결정 전)만 수정 가능하게: status=APPROVAL_PENDING
+        if (m.getStatus() != MaintenanceStatus.APPROVAL_PENDING) {
+            throw new ExceptionApi400("수정 불가 상태입니다. status=" + m.getStatus());
+        }
+
+        // ✅ 최신 attempt
+        List<MaintenanceEstimateAttempt> attempts = attemptRepository
+                .findByMaintenance_IdOrderByAttemptNoAsc(m.getId());
+
+        if (attempts.isEmpty()) {
+            throw new ExceptionApi400("수정할 견적(attempt)이 없습니다.");
+        }
+
+        MaintenanceEstimateAttempt current = attempts.get(attempts.size() - 1);
+
+        // ✅ HQ가 이미 결정을 내렸으면 수정 금지
+        if (current.getHqDecision() != MaintenanceEstimateAttempt.HqDecision.PENDING) {
+            throw new ExceptionApi400("HQ 결정 이후에는 수정할 수 없습니다.");
+        }
+
+        // ✅ 필수 검증
+        if (dto == null || dto.getEstimateAmount() == null || dto.getEstimateAmount().trim().isEmpty()) {
+            throw new ExceptionApi400("estimateAmount는 필수입니다.");
+        }
+
+        // 0) 작업자 검증/조회
+        VendorWorker worker = null;
+        if (dto.getWorkerId() != null) {
+            worker = vendorWorkerRepository
+                    .findByIdAndVendorIdAndIsActiveTrue(dto.getWorkerId(), loginUser.id().longValue())
+                    .orElseThrow(() -> new ExceptionApi400("유효하지 않은 작업자입니다."));
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+
+        // 1) ✅ attempt 본문 수정 (⚠️ builder/save로 새 엔티티 만들지 말 것)
+        current.updateEstimate(
+                dto.getEstimateAmount().trim(),
+                dto.getEstimateComment(),
+                dto.getWorkStartDate(),
+                dto.getWorkEndDate(),
+                worker,
+                now);
+
+        // (선택) 영속 상태면 save() 없어도 dirty checking으로 반영됨
+        // attemptRepository.save(current);
+
+        // 2) ✅ 사진은 “photoChanged=true”일 때만 교체
+        boolean photoChanged = Boolean.TRUE.equals(dto.getPhotoChanged());
+        if (photoChanged) {
+            List<MaintenanceRequest.SubmitEstimateDTO.EstimatePhotoDTO> incoming = (dto.getEstimatePhotos() == null)
+                    ? List.of()
+                    : dto.getEstimatePhotos();
+
+            List<MaintenanceRequest.SubmitEstimateDTO.EstimatePhotoDTO> valid = incoming.stream()
+                    .filter(p -> p.getFileKey() != null && !p.getFileKey().trim().isEmpty())
+                    .filter(p -> p.getPublicUrl() != null && !p.getPublicUrl().trim().isEmpty())
+                    .toList();
+
+            // ✅ 전체 교체(삭제+삽입)
+            maintenancePhotoRepository.deleteByMaintenanceIdAndPhotoTypeAndAttemptNo(
+                    m.getId(),
+                    MaintenancePhoto.PhotoType.ESTIMATE,
+                    current.getAttemptNo());
+
+            if (!valid.isEmpty()) {
+                List<MaintenancePhoto> photos = valid.stream()
+                        .map(p -> MaintenancePhoto.ofEstimate(
+                                m,
+                                p.getFileKey().trim(),
+                                p.getPublicUrl().trim(),
+                                current.getAttemptNo()))
+                        .toList();
+
+                maintenancePhotoRepository.saveAll(photos);
+            }
+        }
+
+        // 3) ✅ 상태는 여전히 APPROVAL_PENDING 유지 + 레거시 필드 업데이트(원하면)
+        m.setVendorSubmittedAt(now);
+        m.setEstimateRejectedReason(null);
+   // =========================================================
+    // ✅ [추가] 견적 수정 알림 발생 (상태 변화가 없으므로 별도 이벤트)
+    // =========================================================
+    notificationService.notifyEstimateUpdated(m);
+
+    // (선택) 작업자 ID를 maintenance에도 저장해두는 정책이면 같이 갱신
+    // m.setVendorWorkerId(worker == null ? null : worker.getId());
     }
 
     @Transactional
@@ -647,7 +864,7 @@ public class MaintenanceService {
 
         m.setResultComment(comment);
         m.setWorkCompletedAt(LocalDateTime.now());
-        m.setStatus(MaintenanceStatus.COMPLETED);
+        changeStatusWithNotify(m, MaintenanceStatus.COMPLETED);
         maintenanceRepository.save(m);
 
         if (dto.getResultPhotos() != null && !dto.getResultPhotos().isEmpty()) {

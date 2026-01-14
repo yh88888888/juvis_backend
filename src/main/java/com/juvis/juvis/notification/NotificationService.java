@@ -1,8 +1,6 @@
 package com.juvis.juvis.notification;
 
-import java.util.EnumSet;
 import java.util.LinkedHashSet;
-import java.util.List;
 import java.util.Set;
 
 import org.springframework.stereotype.Service;
@@ -29,96 +27,104 @@ public class NotificationService {
     private final UserRepository userRepository;
     private final MaintenanceRepository maintenanceRepository;
 
-    // ✅ 상태별 수신 정책 (원하면 여기만 바꾸면 됨)
-    private boolean allowBranch(MaintenanceStatus s) {
-        return s != MaintenanceStatus.DRAFT && s != MaintenanceStatus.REQUESTED;
-    }
-
-    private boolean allowHq(MaintenanceStatus s) {
-        return s != MaintenanceStatus.DRAFT;
-    }
-
-    private boolean allowVendor(MaintenanceStatus s) {
-        return s != MaintenanceStatus.DRAFT;
-    }
-
+    // =========================
+    // 1) 상태 변경 기반 알림
+    // =========================
     @Transactional
-    public void notifyOnStatusChange(
-            Maintenance m,
-            MaintenanceStatus before,
-            MaintenanceStatus after) {
-
-        // ✅ 실제 상태 변경 없으면 종료
-        if (before == after)
-            return;
+    public void notifyOnStatusChange(Maintenance m, MaintenanceStatus before, MaintenanceStatus after) {
+        if (before == after) return;
 
         Set<User> targets = new LinkedHashSet<>();
 
-        // =========================
-        // 1️⃣ 본사(HQ) — 항상
-        // =========================
-        if (EnumSet.of(
-                MaintenanceStatus.REQUESTED, // 지점이 요청 제출했을 때 HQ가 봐야함
-                MaintenanceStatus.APPROVAL_PENDING, // 벤더가 견적 제출했을 때 HQ 2차 검토
-                MaintenanceStatus.COMPLETED // (원하면) 완료 보고를 HQ가 받게
-        ).contains(after)) {
+        // HQ: (any)->REQUESTED, ESTIMATING->APPROVAL_PENDING, IN_PROGRESS->COMPLETED
+        if (after == MaintenanceStatus.REQUESTED
+                || (before == MaintenanceStatus.ESTIMATING && after == MaintenanceStatus.APPROVAL_PENDING)
+                || (before == MaintenanceStatus.IN_PROGRESS && after == MaintenanceStatus.COMPLETED)) {
             targets.addAll(userRepository.findByRole(UserRole.HQ));
         }
 
-        // =========================
-        // 2️⃣ 지점(요청자)
-        // =========================
-        if (m.getRequester() != null &&
-                EnumSet.of(MaintenanceStatus.HQ1_REJECTED).contains(after)) {
-            targets.add(m.getRequester());
+        // Vendor: REQUESTED->ESTIMATING, APPROVAL_PENDING->IN_PROGRESS
+        if (m.getVendor() != null) {
+            if ((before == MaintenanceStatus.REQUESTED && after == MaintenanceStatus.ESTIMATING)
+                    || (before == MaintenanceStatus.APPROVAL_PENDING && after == MaintenanceStatus.IN_PROGRESS)) {
+                targets.add(m.getVendor());
+            }
         }
 
-        // =========================
-        // 3️⃣ 업체(VENDOR)
-        // =========================
-        if (m.getVendor() != null &&
-                EnumSet.of(
-                        MaintenanceStatus.ESTIMATING,
-                        MaintenanceStatus.IN_PROGRESS,
-                        MaintenanceStatus.HQ2_REJECTED).contains(after)) {
-            targets.add(m.getVendor());
+        // Branch(요청자): ESTIMATING->APPROVAL_PENDING, APPROVAL_PENDING->IN_PROGRESS(✅ 추가)
+        if (m.getRequester() != null) {
+            if ((before == MaintenanceStatus.ESTIMATING && after == MaintenanceStatus.APPROVAL_PENDING)
+                    || (before == MaintenanceStatus.APPROVAL_PENDING && after == MaintenanceStatus.IN_PROGRESS)) {
+                targets.add(m.getRequester());
+            }
         }
 
-        // =========================
-        // 4️⃣ 알림 저장 (중복 방지)
-        // =========================
+        // 저장 + dedupe
         for (User u : targets) {
-            boolean exists = notificationRepository
-                    .existsByUserAndMaintenanceAndStatusAndIsReadFalse(
-                            u, m, after);
-
-            if (exists)
-                continue;
+            boolean exists = notificationRepository.existsByUserAndMaintenanceAndStatusAndEventType(
+                    u, m, after, NotificationEventType.STATUS_CHANGED);
+            if (exists) continue;
 
             try {
-                notificationRepository.save(
-                        new Notification(u, m));
-            } catch (Exception ignore) {
-                // unique 충돌 등은 무시
-            }
+                notificationRepository.save(Notification.statusChanged(u, m, after));
+            } catch (Exception ignore) {}
         }
     }
 
+    // =========================
+    // 2) “견적 수정” 이벤트 알림 (상태 유지)
+    // - Branch(요청자) + HQ 전체에게 알림
+    // =========================
+    @Transactional
+    public void notifyEstimateUpdated(Maintenance m) {
+        if (m.getStatus() != MaintenanceStatus.APPROVAL_PENDING) return;
+
+        Set<User> targets = new LinkedHashSet<>();
+
+        // Branch(요청자)
+        if (m.getRequester() != null) {
+            targets.add(m.getRequester());
+        }
+
+        // HQ 전체
+        targets.addAll(userRepository.findByRole(UserRole.HQ));
+
+        if (targets.isEmpty()) return;
+
+        // ✅ 매 수정마다 중복키가 달라지게(초 단위)
+        // (Notification 엔티티 unique key가 user_id, maintenance_id, event_type, attempt_no 이므로)
+        int dedupeKey = (int) java.time.Instant.now().getEpochSecond();
+
+        for (User u : targets) {
+            try {
+                notificationRepository.save(Notification.estimateUpdated(u, m, dedupeKey));
+            } catch (Exception ignore) {}
+        }
+    }
+
+    // 예: 상태 변경 엔드포인트에서 사용
     @Transactional
     public void changeStatus(Long maintenanceId, MaintenanceStatus next) {
-
         Maintenance m = maintenanceRepository.findById(maintenanceId)
                 .orElseThrow(() -> new ExceptionApi404("유지보수 없음"));
 
         MaintenanceStatus before = m.getStatus();
-
-        // ✅ 이제 정상 동작
         m.changeStatus(next);
-
         notifyOnStatusChange(m, before, next);
     }
 
-    public List<NotificationResponse.ItemDTO> list(LoginUser loginUser) {
+    // 예: “견적 수정” API(벤더 PUT)에서 호출
+    @Transactional
+    public void onVendorEstimateUpdated(Long maintenanceId) {
+        Maintenance m = maintenanceRepository.findById(maintenanceId)
+                .orElseThrow(() -> new ExceptionApi404("유지보수 없음"));
+        notifyEstimateUpdated(m);
+    }
+
+    // =========================
+    // 나머지 기존 기능
+    // =========================
+    public java.util.List<NotificationResponse.ItemDTO> list(LoginUser loginUser) {
         User me = loadUser(loginUser);
         return notificationRepository.findTop50ByUserOrderByCreatedAtDesc(me)
                 .stream().map(NotificationResponse.ItemDTO::new).toList();
@@ -137,19 +143,14 @@ public class NotificationService {
         n.markRead();
     }
 
+    @Transactional
+    public void markAllRead(LoginUser user) {
+        notificationRepository.markAllReadByUserId(user.id().longValue());
+    }
+
     private User loadUser(LoginUser loginUser) {
-        if (loginUser == null)
-            throw new ExceptionApi403("로그인이 필요합니다.");
-
-        Long userId = loginUser.id().longValue(); // ✅ Integer → Long 변환
-
+        if (loginUser == null) throw new ExceptionApi403("로그인이 필요합니다.");
         return userRepository.findById(loginUser.id())
                 .orElseThrow(() -> new ExceptionApi404("사용자 없음"));
     }
-
-    @Transactional
-    public void markAllRead(LoginUser user) {
-        notificationRepository.markAllReadByUserId(user.id());
-    }
-
 }

@@ -319,14 +319,19 @@ CREATE TABLE comment (
     ON UPDATE RESTRICT ON DELETE RESTRICT
 ) ENGINE=InnoDB;
 
--- 8) notification (수정본)
+-- 8) notification (엔티티 기준 최종본)
 CREATE TABLE notification (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
 
-  user_id BIGINT UNSIGNED NOT NULL,          -- 받는 사람 (user_tb.user_id)
-  maintenance_id BIGINT UNSIGNED NOT NULL,   -- 관련 유지보수 (maintenance_request.request_id)
+  user_id BIGINT UNSIGNED NOT NULL,
+  maintenance_id BIGINT UNSIGNED NOT NULL,
 
   status VARCHAR(50) NOT NULL,
+  event_type VARCHAR(30) NOT NULL,
+
+  -- ✅ dedupe용 키
+  attempt_no INT NOT NULL,
+
   message VARCHAR(255) NOT NULL,
 
   is_read BOOLEAN NOT NULL DEFAULT FALSE,
@@ -334,16 +339,32 @@ CREATE TABLE notification (
 
   KEY idx_notif_user_created (user_id, created_at),
   KEY idx_notif_user_read (user_id, is_read),
-  UNIQUE KEY uq_notif_dedupe (user_id, maintenance_id, status, is_read),
+
+  -- ✅ 중복 방지 (상태변경은 attempt_no=0 고정이라 status별 1번만 쌓임)
+  -- ✅ 견적수정은 attempt_no를 매번 다르게 넣으면 매번 신규 생성됨
+  UNIQUE KEY uq_notif_dedupe (
+    user_id,
+    maintenance_id,
+    event_type,
+    status,
+    attempt_no
+  ),
 
   CONSTRAINT fk_notif_user
-    FOREIGN KEY (user_id) REFERENCES user_tb(user_id)
-    ON UPDATE RESTRICT ON DELETE CASCADE,
+    FOREIGN KEY (user_id)
+    REFERENCES user_tb(user_id)
+    ON UPDATE RESTRICT
+    ON DELETE CASCADE,
 
   CONSTRAINT fk_notif_maintenance
-    FOREIGN KEY (maintenance_id) REFERENCES maintenance_request(request_id)
-    ON UPDATE RESTRICT ON DELETE CASCADE
-) ENGINE=InnoDB;
+    FOREIGN KEY (maintenance_id)
+    REFERENCES maintenance_request(request_id)
+    ON UPDATE RESTRICT
+    ON DELETE CASCADE
+) ENGINE=InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_0900_ai_ci;
+
 
 -- 9) activity_log
 CREATE TABLE activity_log (

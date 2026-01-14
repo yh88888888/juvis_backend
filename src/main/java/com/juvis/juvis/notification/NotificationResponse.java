@@ -14,6 +14,7 @@ public class NotificationResponse {
         private Long maintenanceId;
         private String title;
         private MaintenanceStatus status;
+        private NotificationEventType eventType; // ✅ 추가
         private String message;
         private boolean read;
         private LocalDateTime createdAt;
@@ -23,6 +24,7 @@ public class NotificationResponse {
             this.maintenanceId = n.getMaintenance().getId();
             this.title = n.getMaintenance().getTitle();
             this.status = n.getStatus();
+            this.eventType = n.getEventType(); // ✅ 추가
             this.message = n.getMessage();
             this.read = n.isRead();
             this.createdAt = n.getCreatedAt();

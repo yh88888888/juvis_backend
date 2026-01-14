@@ -81,4 +81,20 @@ public class MaintenanceRequest {
             private String publicUrl;
         }
     }
+
+    @Getter
+    @Setter
+    public static class UpdateEstimateDTO {
+        private String estimateAmount;
+        private String estimateComment;
+        private LocalDate workStartDate;
+        private LocalDate workEndDate;
+        private Long workerId;
+
+        // ✅ 사진 변경 여부: false면 서버는 사진 테이블을 절대 건드리지 않는다
+        private Boolean photoChanged;
+
+        // ✅ photoChanged=true일 때만 사용: 최종 사진 목록(기존 유지 + 새 사진)
+        private List<SubmitEstimateDTO.EstimatePhotoDTO> estimatePhotos;
+    }
 }
