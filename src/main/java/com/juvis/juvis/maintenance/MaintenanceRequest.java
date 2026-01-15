@@ -97,4 +97,16 @@ public class MaintenanceRequest {
         // ✅ photoChanged=true일 때만 사용: 최종 사진 목록(기존 유지 + 새 사진)
         private List<SubmitEstimateDTO.EstimatePhotoDTO> estimatePhotos;
     }
+
+    @Getter
+    @Setter
+    @Data
+    public static class HqCreateDTO {
+        private Long branchId; // ✅ 필수
+        private String title;
+        private String description;
+        private MaintenanceCategory category;
+        private boolean submit; // 저장/제출 동일 UX
+        private List<PhotoDTO> photos;
+    }
 }

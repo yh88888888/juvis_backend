@@ -32,7 +32,8 @@ public class NotificationService {
     // =========================
     @Transactional
     public void notifyOnStatusChange(Maintenance m, MaintenanceStatus before, MaintenanceStatus after) {
-        if (before == after) return;
+        if (before == after)
+            return;
 
         Set<User> targets = new LinkedHashSet<>();
 
@@ -45,13 +46,17 @@ public class NotificationService {
 
         // Vendor: REQUESTED->ESTIMATING, APPROVAL_PENDING->IN_PROGRESS
         if (m.getVendor() != null) {
-            if ((before == MaintenanceStatus.REQUESTED && after == MaintenanceStatus.ESTIMATING)
-                    || (before == MaintenanceStatus.APPROVAL_PENDING && after == MaintenanceStatus.IN_PROGRESS)) {
+            boolean vendorShouldNotify = (after == MaintenanceStatus.ESTIMATING) // ✅ DRAFT->ESTIMATING /
+                                                                                 // REQUESTED->ESTIMATING 모두 포함
+                    || (before == MaintenanceStatus.APPROVAL_PENDING && after == MaintenanceStatus.IN_PROGRESS);
+
+            if (vendorShouldNotify) {
                 targets.add(m.getVendor());
             }
         }
 
-        // Branch(요청자): ESTIMATING->APPROVAL_PENDING, APPROVAL_PENDING->IN_PROGRESS(✅ 추가)
+        // Branch(요청자): ESTIMATING->APPROVAL_PENDING, APPROVAL_PENDING->IN_PROGRESS(✅
+        // 추가)
         if (m.getRequester() != null) {
             if ((before == MaintenanceStatus.ESTIMATING && after == MaintenanceStatus.APPROVAL_PENDING)
                     || (before == MaintenanceStatus.APPROVAL_PENDING && after == MaintenanceStatus.IN_PROGRESS)) {
@@ -63,11 +68,13 @@ public class NotificationService {
         for (User u : targets) {
             boolean exists = notificationRepository.existsByUserAndMaintenanceAndStatusAndEventType(
                     u, m, after, NotificationEventType.STATUS_CHANGED);
-            if (exists) continue;
+            if (exists)
+                continue;
 
             try {
                 notificationRepository.save(Notification.statusChanged(u, m, after));
-            } catch (Exception ignore) {}
+            } catch (Exception ignore) {
+            }
         }
     }
 
@@ -77,7 +84,8 @@ public class NotificationService {
     // =========================
     @Transactional
     public void notifyEstimateUpdated(Maintenance m) {
-        if (m.getStatus() != MaintenanceStatus.APPROVAL_PENDING) return;
+        if (m.getStatus() != MaintenanceStatus.APPROVAL_PENDING)
+            return;
 
         Set<User> targets = new LinkedHashSet<>();
 
@@ -89,16 +97,19 @@ public class NotificationService {
         // HQ 전체
         targets.addAll(userRepository.findByRole(UserRole.HQ));
 
-        if (targets.isEmpty()) return;
+        if (targets.isEmpty())
+            return;
 
         // ✅ 매 수정마다 중복키가 달라지게(초 단위)
-        // (Notification 엔티티 unique key가 user_id, maintenance_id, event_type, attempt_no 이므로)
+        // (Notification 엔티티 unique key가 user_id, maintenance_id, event_type, attempt_no
+        // 이므로)
         int dedupeKey = (int) java.time.Instant.now().getEpochSecond();
 
         for (User u : targets) {
             try {
                 notificationRepository.save(Notification.estimateUpdated(u, m, dedupeKey));
-            } catch (Exception ignore) {}
+            } catch (Exception ignore) {
+            }
         }
     }
 
@@ -149,7 +160,8 @@ public class NotificationService {
     }
 
     private User loadUser(LoginUser loginUser) {
-        if (loginUser == null) throw new ExceptionApi403("로그인이 필요합니다.");
+        if (loginUser == null)
+            throw new ExceptionApi403("로그인이 필요합니다.");
         return userRepository.findById(loginUser.id())
                 .orElseThrow(() -> new ExceptionApi404("사용자 없음"));
     }

@@ -254,4 +254,20 @@ public class MaintenanceController {
 
         return Resp.ok(maintenanceService.completeWorkAndGetDetail(currentUser, id, dto));
     }
+
+    @PostMapping("/api/hq/maintenances")
+    public ResponseEntity<?> createByHq(
+            @AuthenticationPrincipal LoginUser loginUser,
+            @RequestBody MaintenanceRequest.HqCreateDTO dto) {
+        Maintenance m = maintenanceService.createByHq(loginUser, dto);
+        return Resp.ok(maintenanceService.toDetailDTO(m));
+    }
+
+    @PostMapping("/api/hq/maintenances/{id}/submit")
+    public ResponseEntity<?> submitByHq(
+            @AuthenticationPrincipal LoginUser loginUser,
+            @PathVariable Long id) {
+        maintenanceService.submitRequestByHq(loginUser, id);
+        return Resp.ok("제출완료");
+    }
 }

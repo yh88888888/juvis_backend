@@ -18,6 +18,7 @@ import com.juvis.juvis._core.error.ex.ExceptionApi400;
 import com.juvis.juvis._core.error.ex.ExceptionApi403;
 import com.juvis.juvis._core.error.ex.ExceptionApi404;
 import com.juvis.juvis.branch.Branch;
+import com.juvis.juvis.branch.BranchRepository;
 import com.juvis.juvis.maintenance_estimate.MaintenanceEstimateAttempt;
 import com.juvis.juvis.maintenance_estimate.MaintenanceEstimateAttemptRepository;
 import com.juvis.juvis.maintenance_photo.MaintenancePhoto;
@@ -46,6 +47,7 @@ public class MaintenanceService {
     private final NotificationService notificationService;
     private final MaintenanceEstimateAttemptRepository attemptRepository;
     private final VendorWorkerRepository vendorWorkerRepository;
+    private final BranchRepository branchRepository;
 
     // ---------- 공통 로더 ----------
     private User loadUser(LoginUser loginUser) {
@@ -818,13 +820,13 @@ public class MaintenanceService {
         // 3) ✅ 상태는 여전히 APPROVAL_PENDING 유지 + 레거시 필드 업데이트(원하면)
         m.setVendorSubmittedAt(now);
         m.setEstimateRejectedReason(null);
-   // =========================================================
-    // ✅ [추가] 견적 수정 알림 발생 (상태 변화가 없으므로 별도 이벤트)
-    // =========================================================
-    notificationService.notifyEstimateUpdated(m);
+        // =========================================================
+        // ✅ [추가] 견적 수정 알림 발생 (상태 변화가 없으므로 별도 이벤트)
+        // =========================================================
+        notificationService.notifyEstimateUpdated(m);
 
-    // (선택) 작업자 ID를 maintenance에도 저장해두는 정책이면 같이 갱신
-    // m.setVendorWorkerId(worker == null ? null : worker.getId());
+        // (선택) 작업자 ID를 maintenance에도 저장해두는 정책이면 같이 갱신
+        // m.setVendorWorkerId(worker == null ? null : worker.getId());
     }
 
     @Transactional
@@ -887,4 +889,89 @@ public class MaintenanceService {
         m.setStatus(next);
         notificationService.notifyOnStatusChange(m, before, next);
     }
+
+    @Transactional
+    public Maintenance createByHq(LoginUser loginUser, MaintenanceRequest.HqCreateDTO dto) {
+
+        if (loginUser == null || loginUser.role() != UserRole.HQ) {
+            throw new ExceptionApi403("HQ만 요청서를 생성할 수 있습니다.");
+        }
+
+        if (dto.getBranchId() == null) {
+            throw new ExceptionApi400("branchId는 필수입니다.");
+        }
+
+        User hqUser = loadUser(loginUser);
+
+        Branch branch = branchRepository.findById(dto.getBranchId())
+                .orElseThrow(() -> new ExceptionApi404(
+                        "지점을 찾을 수 없습니다. id=" + dto.getBranchId()));
+
+        // ✅ DRAFT로 생성 (저장 버튼)
+        Maintenance m = Maintenance.createDraft(
+                branch,
+                hqUser, // requester = HQ
+                new MaintenanceRequest.CreateDTO() {
+                    {
+                        setTitle(dto.getTitle());
+                        setDescription(dto.getDescription());
+                        setCategory(dto.getCategory());
+                        setSubmit(false);
+                        setPhotos(dto.getPhotos());
+                    }
+                });
+
+        Maintenance saved = maintenanceRepository.save(m);
+
+        // ✅ 요청 사진 저장 (기존 로직 그대로)
+        if (dto.getPhotos() != null && !dto.getPhotos().isEmpty()) {
+            List<MaintenancePhoto> photos = dto.getPhotos().stream()
+                    .filter(p -> p.getFileKey() != null && p.getUrl() != null)
+                    .map(p -> MaintenancePhoto.of(
+                            saved,
+                            p.getFileKey(),
+                            p.getUrl(),
+                            MaintenancePhoto.PhotoType.REQUEST))
+                    .toList();
+
+            maintenancePhotoRepository.saveAll(photos);
+        }
+
+        saved.getBranch().getBranchName(); // lazy 방지
+        return saved;
+    }
+
+    @Transactional
+public void submitRequestByHq(LoginUser loginUser, Long id) {
+    if (loginUser == null || loginUser.role() != UserRole.HQ) {
+        throw new ExceptionApi403("HQ만 제출할 수 있습니다.");
+    }
+
+    Maintenance m = findByIdOrThrow(id);
+
+    // ✅ HQ + DRAFT면 제출 가능 (requester_id 무관)
+    if (m.getStatus() != MaintenanceStatus.DRAFT) {
+        throw new ExceptionApi400("제출할 수 없는 상태입니다. status=" + m.getStatus());
+    }
+
+    // ✅ vendor 자동배정
+    User vendor = userRepository.findById(43)
+            .orElseThrow(() -> new ExceptionApi404("고정 업체(VENDOR=43) 없음"));
+    m.setVendor(vendor);
+
+    // ✅ 제출 시점 기록
+    m.setSubmittedAt(LocalDateTime.now());
+
+    // ✅ 곧바로 견적 단계로
+    changeStatusWithNotify(m, MaintenanceStatus.ESTIMATING);
+
+    // ✅ HQ 승인 정보
+    User hqUser = loadUser(loginUser);
+    m.setRequestApprovedBy(hqUser);
+    m.setRequestApprovedAt(LocalDateTime.now());
+    m.setRequestRejectedReason(null);
+}
+
+
+
 }

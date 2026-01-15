@@ -11,8 +11,8 @@ public class PasswordEncodeRunner {
     @Bean
     CommandLineRunner passwordRunner(BCryptPasswordEncoder encoder) {
         return args -> {
-            String encoded = encoder.encode("1234");
-            System.out.println("BCrypt(1234) = " + encoded);
+            String encoded = encoder.encode("585858");
+            System.out.println("BCrypt(585858) = " + encoded);
         };
     }
 }
