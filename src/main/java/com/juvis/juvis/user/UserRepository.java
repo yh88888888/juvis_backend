@@ -54,20 +54,35 @@ public class UserRepository {
 
     }
 
-public List<User> findBranchUsers() {
+    public List<User> findBranchUsers() {
+        return em.createQuery(
+                """
+                        select u
+                        from User u
+                        left join fetch u.branch b
+                        where u.role = :role
+                        order by b.id asc, u.id asc
+                        """,
+                User.class)
+                .setParameter("role", UserRole.BRANCH)
+                .getResultList();
+    }
+
+public List<User> findAllByBranchIdAndRole(Long branchId, UserRole role) {
     return em.createQuery(
             """
             select u
             from User u
-            left join fetch u.branch b
-            where u.role = :role
-            order by b.id asc, u.id asc
+            join u.branch b
+            where b.id = :branchId
+              and u.role = :role
+            order by u.id asc
             """,
             User.class
     )
-    .setParameter("role", UserRole.BRANCH)
+    .setParameter("branchId", branchId)
+    .setParameter("role", role)
     .getResultList();
 }
-
 
 }

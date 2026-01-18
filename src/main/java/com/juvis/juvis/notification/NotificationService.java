@@ -57,10 +57,18 @@ public class NotificationService {
 
         // Branch(요청자): ESTIMATING->APPROVAL_PENDING, APPROVAL_PENDING->IN_PROGRESS(✅
         // 추가)
-        if (m.getRequester() != null) {
-            if ((before == MaintenanceStatus.ESTIMATING && after == MaintenanceStatus.APPROVAL_PENDING)
-                    || (before == MaintenanceStatus.APPROVAL_PENDING && after == MaintenanceStatus.IN_PROGRESS)) {
-                targets.add(m.getRequester());
+        if (m.getBranch() != null) {
+            boolean branchShouldNotify = (before == MaintenanceStatus.ESTIMATING
+                    && after == MaintenanceStatus.APPROVAL_PENDING)
+                    || (before == MaintenanceStatus.APPROVAL_PENDING && after == MaintenanceStatus.IN_PROGRESS);
+
+            if (branchShouldNotify) {
+                targets.addAll(
+                        userRepository.findAllByBranchIdAndRole(m.getBranch().getId(), UserRole.BRANCH));
+                ;
+                // 필요하면 요청자도 같이 (요청자가 BRANCH인 경우만)
+                // if (m.getRequester() != null && m.getRequester().getRole() ==
+                // UserRole.BRANCH) targets.add(m.getRequester());
             }
         }
 
