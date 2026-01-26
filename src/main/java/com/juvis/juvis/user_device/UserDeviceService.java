@@ -1,6 +1,5 @@
 package com.juvis.juvis.user_device;
 
-
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,7 +21,8 @@ public class UserDeviceService {
 
     @Transactional
     public void upsert(LoginUser loginUser, DeviceTokenRequest req) {
-        if (loginUser == null) throw new ExceptionApi403("로그인이 필요합니다.");
+        if (loginUser == null)
+            throw new ExceptionApi403("로그인이 필요합니다.");
 
         User me = userRepository.findById(loginUser.id())
                 .orElseThrow(() -> new ExceptionApi404("사용자 없음"));
@@ -31,8 +31,8 @@ public class UserDeviceService {
         String platform = req.platform().trim().toUpperCase();
 
         userDeviceRepository.findByToken(token).ifPresentOrElse(existing -> {
-            // 토큰이 이미 있으면 사용자 매핑만 최신화(다른 계정으로 로그인한 케이스 방지)
-            existing.touch(platform);
+            // ✅ 토큰이 이미 있으면: user까지 최신화 (다른 계정으로 로그인한 케이스 방지)
+            existing.rebind(me, platform);
             userDeviceRepository.update(existing);
         }, () -> {
             userDeviceRepository.save(UserDevice.of(me, platform, token));

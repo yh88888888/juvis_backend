@@ -9,8 +9,7 @@ import lombok.NoArgsConstructor;
 @Entity
 @Getter
 @NoArgsConstructor
-@Table(name = "user_device",
-       uniqueConstraints = @UniqueConstraint(name="uq_user_device_token", columnNames = "fcm_token"))
+@Table(name = "user_device", uniqueConstraints = @UniqueConstraint(name = "uq_user_device_token", columnNames = "fcm_token"))
 public class UserDevice {
 
     @Id
@@ -32,6 +31,11 @@ public class UserDevice {
 
     @Column(name = "last_seen_at")
     private LocalDateTime lastSeenAt;
+
+    public void rebind(User user, String platform) {
+        this.user = user;
+        touch(platform);
+    }
 
     public static UserDevice of(User user, String platform, String token) {
         UserDevice d = new UserDevice();

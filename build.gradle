@@ -18,48 +18,45 @@ repositories {
 }
 
 dependencies {
-    // Spring
+	// Spring
 	implementation 'org.springframework.boot:spring-boot-starter-web'
-    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
-    implementation 'org.springframework.boot:spring-boot-starter-validation'
+	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+	implementation 'org.springframework.boot:spring-boot-starter-validation'
 
-    // ── 보안 / 인증 ─────────────────────────────────────────────────────────
-    implementation 'org.springframework.boot:spring-boot-starter-security'     // Spring Security (필터 체인 등)
-    implementation 'com.auth0:java-jwt:4.3.0'                                  // JWT 생성/검증 라이브러리
-    implementation 'org.mindrot:jbcrypt:0.4'                                   // 비밀번호 해싱(BCrypt)
+	// Security / Auth
+	implementation 'org.springframework.boot:spring-boot-starter-security'
+	implementation 'com.auth0:java-jwt:4.3.0'
+	implementation 'org.mindrot:jbcrypt:0.4'
 
-    // DB Driver
-    runtimeOnly 'com.mysql:mysql-connector-j:9.1.0' 
+	// DB Driver
+	runtimeOnly 'com.mysql:mysql-connector-j:9.1.0'
 
-    // ── AOP (횡단 관심사) ────────────────────────────────────────────────
-    implementation 'org.springframework.boot:spring-boot-starter-aop'          // 로깅, 트랜잭션, 보안 등 AOP 적용
+	// AOP
+	implementation 'org.springframework.boot:spring-boot-starter-aop'
 
-    // Flyway (MySQL 전용 모듈)
-    implementation 'org.flywaydb:flyway-core'
-    implementation 'org.flywaydb:flyway-mysql'
+	// Flyway
+	implementation 'org.flywaydb:flyway-core'
+	implementation 'org.flywaydb:flyway-mysql'
 
-    // ── 유틸 / 롬복 ─────────────────────────────────────────────────────────
-    implementation 'org.apache.commons:commons-lang3:3.12.0'                   // 문자열/컬렉션 등 유틸
-    compileOnly 'org.projectlombok:lombok'                                     // 롬복 애너테이션 (컴파일 시에만 필요)
-    annotationProcessor 'org.projectlombok:lombok'                             // 롬복 애너테이션 처리기
+	// Utils / Lombok
+	implementation 'org.apache.commons:commons-lang3:3.12.0'
+	compileOnly 'org.projectlombok:lombok'
+	annotationProcessor 'org.projectlombok:lombok'
 
-    // ── AWS SDK ─────────────────────────────────────────────────────────────
-    implementation "io.awspring.cloud:spring-cloud-aws-starter-s3:3.4.0"
-    // Boot 3.x 호환, AWS SDK v2 기반 (S3Client 자동주입, S3Template 제공, s3:// 리소스 로더 지원)
+	// AWS S3
+	implementation "io.awspring.cloud:spring-cloud-aws-starter-s3:3.4.0"
 
-    // Test
-    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+	// Firebase
+	implementation 'com.google.firebase:firebase-admin:9.2.0'
+
+	// ✅ Test (핵심)
+	testImplementation 'org.springframework.boot:spring-boot-starter-test'
+	testImplementation 'com.h2database:h2'
+
 	testCompileOnly 'org.projectlombok:lombok'
 	testAnnotationProcessor 'org.projectlombok:lombok'
-	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
-}
-
-test {
-    useJUnitPlatform()
 }
 
 tasks.named('test') {
 	useJUnitPlatform()
 }
-
-

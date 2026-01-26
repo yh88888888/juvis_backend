@@ -1,6 +1,8 @@
 package com.juvis.juvis.notification;
 
 import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import org.springframework.stereotype.Service;
@@ -15,9 +17,12 @@ import com.juvis.juvis.maintenance.MaintenanceRepository;
 import com.juvis.juvis.user.LoginUser;
 import com.juvis.juvis.user.User;
 import com.juvis.juvis.user.UserRepository;
+import com.juvis.juvis.user_device.UserDeviceRepository;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -26,6 +31,8 @@ public class NotificationService {
     private final NotificationRepository notificationRepository;
     private final UserRepository userRepository;
     private final MaintenanceRepository maintenanceRepository;
+    private final UserDeviceRepository userDeviceRepository;
+    private final FcmPushService fcmPushService;
 
     // =========================
     // 1) 상태 변경 기반 알림
@@ -84,6 +91,7 @@ public class NotificationService {
             } catch (Exception ignore) {
             }
         }
+        pushToTargets(targets, m, NotificationEventType.STATUS_CHANGED, after.name());
     }
 
     // =========================
@@ -98,8 +106,8 @@ public class NotificationService {
         Set<User> targets = new LinkedHashSet<>();
 
         // Branch(요청자)
-        if (m.getRequester() != null) {
-            targets.add(m.getRequester());
+        if (m.getBranch() != null) {
+            targets.addAll(userRepository.findAllByBranchIdAndRole(m.getBranch().getId(), UserRole.BRANCH));
         }
 
         // HQ 전체
@@ -111,7 +119,7 @@ public class NotificationService {
         // ✅ 매 수정마다 중복키가 달라지게(초 단위)
         // (Notification 엔티티 unique key가 user_id, maintenance_id, event_type, attempt_no
         // 이므로)
-        int dedupeKey = (int) java.time.Instant.now().getEpochSecond();
+        int dedupeKey = (int)(System.currentTimeMillis() % Integer.MAX_VALUE);
 
         for (User u : targets) {
             try {
@@ -119,6 +127,7 @@ public class NotificationService {
             } catch (Exception ignore) {
             }
         }
+        pushToTargets(targets, m, NotificationEventType.ESTIMATE_UPDATED, m.getStatus().name());
     }
 
     // 예: 상태 변경 엔드포인트에서 사용
@@ -172,5 +181,43 @@ public class NotificationService {
             throw new ExceptionApi403("로그인이 필요합니다.");
         return userRepository.findById(loginUser.id())
                 .orElseThrow(() -> new ExceptionApi404("사용자 없음"));
+    }
+
+    private void pushToTargets(Set<User> targets, Maintenance m, NotificationEventType eventType, String status) {
+        if (targets == null || targets.isEmpty()) {
+            log.info("📭 push skip: targets empty event={} mId={}", eventType, m.getId());
+            return;
+        }
+
+        List<Integer> userIds = targets.stream().map(User::getId).toList();
+        List<String> tokens = userDeviceRepository.findActiveTokensByUserIds(userIds);
+
+        log.info("📨 push prepare: event={} mId={} targets={} tokens={}",
+                eventType, m.getId(), userIds.size(), tokens.size());
+        if (tokens.isEmpty())
+            return;
+
+        String title = "[유지보수] " + (m.getTitle() == null ? "" : m.getTitle());
+        String body = (eventType == NotificationEventType.ESTIMATE_UPDATED)
+                ? "견적이 수정되었습니다. 확인해주세요."
+                : "요청 상태가 변경되었습니다: " + status;
+
+        Map<String, String> data = Map.of(
+                "type", eventType.name(),
+                "maintenanceId", String.valueOf(m.getId()),
+                "status", status);
+
+        fcmPushService.sendToTokens(tokens, title, body, data);
+    }
+
+    @Transactional
+    public void sendTestPush(Long userId) {
+
+        // ⚠️ 지금은 DB에서 가져오는 대신, 방금 확인한 토큰을 하드코딩
+        fcmPushService.sendToTokens(
+                List.of("en5-fs2ETp6i8BzR9YEH3F..."),
+                "🔥 테스트",
+                "지금 이 알림이 뜨면 성공",
+                Map.of("type", "TEST"));
     }
 }
