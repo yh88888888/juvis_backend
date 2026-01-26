@@ -106,14 +106,20 @@ CREATE TABLE maintenance_request (
     'COMPLETED'
   ) NOT NULL DEFAULT 'DRAFT',
 
-  category       ENUM(
-    'ELECTRICAL_COMMUNICATION',
-    'LIGHTING',
-    'HVAC',
-    'WATER_SUPPLY_DRAINAGE',
-    'SAFETY_HYGIENE',
-    'ETC'
-  ) NOT NULL DEFAULT 'ETC',
+  category ENUM(
+  'PAINTING',            -- 도장
+  'WALLPAPER',           -- 도배
+  'DOOR',                -- 도어
+  'DOOR_LOCK',           -- 도어락
+  'FURNITURE_REPAIR',    -- 가구수리
+  'SANITARY_FIXTURE',    -- 세면대 및 샤워기
+  'DRAINAGE',            -- 배수
+  'ELECTRICAL_OUTLET',   -- 전등 및 콘센트
+  'LEAK',                -- 누수
+  'AUTOMATIC_DOOR',      -- 자동문
+  'CCTV',                -- CCTV
+  'ETC'                  -- 기타
+) NOT NULL DEFAULT 'ETC',
 
   vendor_id      BIGINT UNSIGNED NULL,
   vendor_worker_id BIGINT UNSIGNED NULL,   -- ✅ 추가: 벤더 작업자(팀/담당) 선택값
