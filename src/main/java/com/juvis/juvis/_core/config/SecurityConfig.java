@@ -68,22 +68,26 @@ public class SecurityConfig {
         // /s/api/** : 인증 필요, /s/api/admin/** : ADMIN 권한 필요
         http.authorizeHttpRequests(authorize -> authorize
 
-                // ✅ 프리플라이트(OPTIONS)는 무조건 허용 (웹에서 Failed to fetch 방지 핵심)
+                // ✅ 프리플라이트
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
                 // ✅ 공개
                 .requestMatchers("/api/auth/**").permitAll()
                 .requestMatchers("/docs/**").permitAll()
 
-                // ✅ HQ / VENDOR 권한
+                // ✅ OPS (웹 HQ + VENDOR 공용)
+                .requestMatchers("/api/ops/**").hasAnyRole("HQ", "VENDOR")
+
+                // ✅ 기존 역할별 API
                 .requestMatchers("/api/hq/**").hasRole("HQ")
                 .requestMatchers("/api/vendor/**").hasRole("VENDOR")
 
-                // ✅ 나머지 /api는 로그인(토큰) 필요
+                // ✅ 나머지 API는 로그인만 필요
                 .requestMatchers("/api/**").authenticated()
 
-                // 그 외는 필요하면 열어두고, 아니면 막아도 됨
                 .anyRequest().permitAll());
+
+        ;
 
         return http.build();
     }
@@ -92,19 +96,23 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
 
-        // ✅ flutter web dev server origin
-        config.setAllowedOrigins(List.of(
-                "http://localhost:63020",
-                "http://127.0.0.1:63020"
-        ));
+        // ✅ Flutter Web dev server 포트가 매번 바뀜 → 패턴 허용
+        config.setAllowedOriginPatterns(List.of(
+                "http://localhost:*",
+                "http://127.0.0.1:*"));
 
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
-        config.setExposedHeaders(List.of("Authorization"));
+
+        // 응답 헤더 노출
+        config.setExposedHeaders(List.of("Authorization", "Content-Disposition"));
+
+        // ✅ Authorization 헤더 포함 요청/쿠키 사용 가능하게
         config.setAllowCredentials(true);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", config);
         return source;
     }
+
 }

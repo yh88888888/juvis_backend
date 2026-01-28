@@ -3,7 +3,7 @@ package com.juvis.juvis.maintenance;
 import com.juvis.juvis._core.enums.MaintenanceCategory;
 import com.juvis.juvis._core.enums.MaintenanceStatus;
 import com.juvis.juvis.branch.Branch;
-import com.juvis.juvis.maintenance_photo.MaintenancePhoto;
+import com.juvis.juvis.maintenance_vendor.maintenance_photo.MaintenancePhoto;
 import com.juvis.juvis.user.User;
 
 import jakarta.persistence.*;

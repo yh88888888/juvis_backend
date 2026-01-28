@@ -25,7 +25,7 @@ class MaintenanceResponseDetailDtoTest {
         when(m.getStatus()).thenReturn(MaintenanceStatus.IN_PROGRESS);
 
         // category (enum 반환)
-        when(m.getCategory()).thenReturn(MaintenanceCategory.LIGHTING);
+        when(m.getCategory()).thenReturn(MaintenanceCategory.ELECTRICAL_OUTLET);
 
         // vendor
         var vendor = mock(User.class);

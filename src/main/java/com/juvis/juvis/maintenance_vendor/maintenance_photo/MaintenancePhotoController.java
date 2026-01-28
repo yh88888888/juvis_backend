@@ -1,4 +1,4 @@
-package com.juvis.juvis.maintenance_photo;
+package com.juvis.juvis.maintenance_vendor.maintenance_photo;
 
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;

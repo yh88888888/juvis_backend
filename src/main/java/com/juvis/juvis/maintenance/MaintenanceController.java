@@ -23,6 +23,12 @@ import com.juvis.juvis._core.enums.UserRole;
 import com.juvis.juvis._core.util.Resp;
 import com.juvis.juvis.user.LoginUser;
 
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -86,7 +92,7 @@ public class MaintenanceController {
 
     // ========================= HQ =========================
     // HQ – 전체 요청 목록 조회 (status/category/branchId + 페이징)
-    @GetMapping("/hq/maintenance/requests")
+    @GetMapping("/api/hq/maintenance/requests")
     public ResponseEntity<Resp<Page<MaintenanceResponse.SimpleDTO>>> getRequestsForHq(
             @AuthenticationPrincipal LoginUser currentUser,
             @RequestParam(name = "status", required = false) MaintenanceStatus status,
@@ -270,4 +276,50 @@ public class MaintenanceController {
         maintenanceService.submitRequestByHq(loginUser, id);
         return Resp.ok("제출완료");
     }
+
+    // ========================= OPS (HQ + VENDOR) =========================
+
+    // 공용 목록: 최신순/필터/월필터/페이징
+    @GetMapping("/api/ops/maintenance/requests")
+    public ResponseEntity<Resp<Page<MaintenanceResponse.SimpleDTO>>> getRequestsForOps(
+            @AuthenticationPrincipal LoginUser currentUser,
+            @RequestParam(name = "status", required = false) MaintenanceStatus status,
+            @RequestParam(name = "category", required = false) MaintenanceCategory category,
+            @RequestParam(name = "branchId", required = false) Long branchId,
+            @RequestParam(name = "yearMonth", required = false) String yearMonth,
+            @PageableDefault(page = 0, size = 20) @SortDefault(sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
+        Page<Maintenance> result = maintenanceService.getOpsList(currentUser, status, category, branchId, yearMonth,
+                pageable);
+
+        return Resp.ok(result.map(MaintenanceResponse.SimpleDTO::new));
+    }
+
+    // 공용 상세
+    @GetMapping("/api/ops/maintenance/requests/{id}")
+    public ResponseEntity<Resp<MaintenanceResponse.DetailDTO>> getDetailForOps(
+            @AuthenticationPrincipal LoginUser currentUser,
+            @PathVariable("id") Long id) {
+        MaintenanceResponse.DetailDTO dto = maintenanceService.getDetailDtoForOps(currentUser, id);
+        return Resp.ok(dto);
+    }
+
+    @GetMapping("/api/ops/maintenance/requests/excel")
+    public ResponseEntity<byte[]> downloadOpsExcel(
+            @AuthenticationPrincipal LoginUser currentUser,
+            @RequestParam(name = "status", required = false) MaintenanceStatus status,
+            @RequestParam(name = "category", required = false) MaintenanceCategory category,
+            @RequestParam(name = "branchId", required = false) Long branchId,
+            @RequestParam(name = "yearMonth", required = false) String yearMonth) {
+        byte[] bytes = maintenanceService.exportOpsExcel(currentUser, status, category, branchId, yearMonth);
+
+        String fileName = "juvis_requests.xlsx";
+        String encoded = URLEncoder.encode(fileName, StandardCharsets.UTF_8).replaceAll("\\+", "%20");
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename*=UTF-8''" + encoded)
+                .contentType(MediaType.parseMediaType(
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .body(bytes);
+    }
+
 }

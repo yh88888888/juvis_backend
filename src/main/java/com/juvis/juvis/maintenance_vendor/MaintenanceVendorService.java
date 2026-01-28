@@ -8,9 +8,9 @@ import com.juvis.juvis.maintenance.Maintenance;
 import com.juvis.juvis.maintenance.MaintenanceRepository;
 import com.juvis.juvis.maintenance.MaintenanceResponse;
 import com.juvis.juvis.maintenance.MaintenanceService;
-import com.juvis.juvis.maintenance_photo.MaintenancePhotoRepository;
+import com.juvis.juvis.maintenance_vendor.maintenance_photo.MaintenancePhotoRepository;
+import com.juvis.juvis.maintenance_vendor.maintenance_photo.PresignService;
 import com.juvis.juvis.user.LoginUser;
-import com.juvis.juvis.maintenance_photo.PresignService;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;

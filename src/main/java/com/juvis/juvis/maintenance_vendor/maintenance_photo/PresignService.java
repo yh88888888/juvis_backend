@@ -1,4 +1,4 @@
-package com.juvis.juvis.maintenance_photo;
+package com.juvis.juvis.maintenance_vendor.maintenance_photo;
 
 import java.time.Duration;
 import java.time.LocalDate;
@@ -6,8 +6,8 @@ import java.util.UUID;
 
 import org.springframework.stereotype.Service;
 
-import com.juvis.juvis.maintenance_photo.Presign.PresignRequest;
-import com.juvis.juvis.maintenance_photo.Presign.PresignResponse;
+import com.juvis.juvis.maintenance_vendor.maintenance_photo.Presign.PresignRequest;
+import com.juvis.juvis.maintenance_vendor.maintenance_photo.Presign.PresignResponse;
 import com.juvis.juvis.storage.StorageProps;
 import lombok.RequiredArgsConstructor;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;

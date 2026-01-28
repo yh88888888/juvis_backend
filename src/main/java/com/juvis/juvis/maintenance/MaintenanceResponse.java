@@ -16,33 +16,48 @@ import com.juvis.juvis.maintenance_estimate.MaintenanceEstimateAttempt;
 public class MaintenanceResponse {
 
     @Getter
-    @AllArgsConstructor
-    public static class SimpleDTO {
-        private Long id;
-        private String branchName;
-        private String requesterName;
-        private BigDecimal estimateAmount;
+@AllArgsConstructor
+public static class SimpleDTO {
+    private Long id;
+    private String branchName;
+    private String requesterName;
+    private BigDecimal estimateAmount;
 
-        private LocalDate workStartDate;
+    private LocalDate workStartDate;
 
-        private String title;
-        private MaintenanceStatus status;
+    private String title;
+    private MaintenanceStatus status;
 
-        private LocalDateTime createdAt;
-        private LocalDateTime submittedAt;
+    // ✅ 추가: Flutter가 읽을 값
+    private String category;      // ex) "PAINTING"
+    private String categoryName;  // ex) "도장"
 
-        public SimpleDTO(Maintenance m) {
-            this.id = m.getId();
-            this.branchName = m.getBranch() != null ? m.getBranch().getBranchName() : null;
-            this.requesterName = m.getRequester() != null ? m.getRequester().getName() : null;
-            this.estimateAmount = m.getEstimateAmount();
-            this.workStartDate = m.getWorkStartDate();
-            this.title = m.getTitle();
-            this.status = m.getStatus();
-            this.createdAt = m.getCreatedAt();
-            this.submittedAt = m.getSubmittedAt();
+    private LocalDateTime createdAt;
+    private LocalDateTime submittedAt;
+
+    public SimpleDTO(Maintenance m) {
+        this.id = m.getId();
+        this.branchName = m.getBranch() != null ? m.getBranch().getBranchName() : null;
+        this.requesterName = m.getRequester() != null ? m.getRequester().getName() : null;
+        this.estimateAmount = m.getEstimateAmount();
+        this.workStartDate = m.getWorkStartDate();
+        this.title = m.getTitle();
+        this.status = m.getStatus();
+
+        // ✅ 핵심: category 내려주기 (null-safe)
+        if (m.getCategory() != null) {
+            this.category = m.getCategory().name();           // "PAINTING"
+            this.categoryName = m.getCategory().getDisplayName(); // "도장"
+        } else {
+            this.category = null;
+            this.categoryName = null;
         }
+
+        this.createdAt = m.getCreatedAt();
+        this.submittedAt = m.getSubmittedAt();
     }
+}
+
 
     @Getter
     @AllArgsConstructor

@@ -26,17 +26,16 @@ public class AuthController {
     }
 
     @GetMapping("/api/me")
-    public ResponseEntity<?> me(@AuthenticationPrincipal User user) {
-        if (user == null)
+    public ResponseEntity<?> me(@AuthenticationPrincipal LoginUser loginUser) {
+        if (loginUser == null)
             throw new ExceptionApi401("인증 필요");
 
         UserResponse.MeDTO dto = new UserResponse.MeDTO(
-                user.getId(),
-                user.getUsername(),
-                user.getName(),
-                user.getRole().name(),
-                user.isMustChangePassword() // ✅ 핵심
-
+                loginUser.id(),
+                loginUser.username(),
+                null, // name 필요하면 DB에서 로드
+                loginUser.role().name(),
+                false // mustChangePassword도 DB 로드 시 채움
         );
 
         return Resp.ok(dto);

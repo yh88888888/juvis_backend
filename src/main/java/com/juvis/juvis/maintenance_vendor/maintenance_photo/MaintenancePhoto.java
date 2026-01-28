@@ -1,4 +1,4 @@
-package com.juvis.juvis.maintenance_photo;
+package com.juvis.juvis.maintenance_vendor.maintenance_photo;
 
 import com.juvis.juvis.maintenance.Maintenance;
 import jakarta.persistence.*;

@@ -1,5 +1,6 @@
 package com.juvis.juvis.maintenance;
 
+import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -111,4 +112,32 @@ public interface MaintenanceRepository extends JpaRepository<Maintenance, Long> 
   long countByVendorIdAndStatusIn(Integer vendorId, Collection<MaintenanceStatus> statuses);
 
   Optional<Maintenance> findByIdAndVendor_Id(Long id, Integer vendorId);
+
+  @Query(value = """
+      select distinct m
+      from Maintenance m
+      join fetch m.branch b
+      join fetch m.requester r
+      where (:status is null or m.status = :status)
+        and (:category is null or m.category = :category)
+        and (:branchId is null or b.id = :branchId)
+        and (:from is null or m.createdAt >= :from)
+        and (:to is null or m.createdAt < :to)
+      """, countQuery = """
+      select count(m)
+      from Maintenance m
+      where (:status is null or m.status = :status)
+        and (:category is null or m.category = :category)
+        and (:branchId is null or m.branch.id = :branchId)
+        and (:from is null or m.createdAt >= :from)
+        and (:to is null or m.createdAt < :to)
+      """)
+  Page<Maintenance> searchForOps(
+      @Param("status") MaintenanceStatus status,
+      @Param("category") MaintenanceCategory category,
+      @Param("branchId") Long branchId,
+      @Param("from") LocalDateTime from,
+      @Param("to") LocalDateTime to,
+      Pageable pageable);
+
 }

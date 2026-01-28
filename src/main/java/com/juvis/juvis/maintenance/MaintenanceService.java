@@ -1,6 +1,7 @@
 package com.juvis.juvis.maintenance;
 
 import java.time.LocalDateTime;
+import java.time.YearMonth;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -21,15 +22,26 @@ import com.juvis.juvis.branch.Branch;
 import com.juvis.juvis.branch.BranchRepository;
 import com.juvis.juvis.maintenance_estimate.MaintenanceEstimateAttempt;
 import com.juvis.juvis.maintenance_estimate.MaintenanceEstimateAttemptRepository;
-import com.juvis.juvis.maintenance_photo.MaintenancePhoto;
-import com.juvis.juvis.maintenance_photo.MaintenancePhotoRepository;
-import com.juvis.juvis.maintenance_photo.PresignService;
+import com.juvis.juvis.maintenance_vendor.maintenance_photo.MaintenancePhoto;
+import com.juvis.juvis.maintenance_vendor.maintenance_photo.MaintenancePhotoRepository;
+import com.juvis.juvis.maintenance_vendor.maintenance_photo.PresignService;
 import com.juvis.juvis.notification.NotificationService;
 import com.juvis.juvis.user.LoginUser;
 import com.juvis.juvis.user.User;
 import com.juvis.juvis.user.UserRepository;
 import com.juvis.juvis.vendor_worker.VendorWorker;
 import com.juvis.juvis.vendor_worker.VendorWorkerRepository;
+
+import java.io.ByteArrayOutputStream;
+import java.sql.Date;
+import java.sql.Timestamp;
+import java.time.format.DateTimeFormatter;
+
+import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.ss.util.CellRangeAddress;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.domain.PageRequest;
 
 import lombok.extern.slf4j.Slf4j;
 import lombok.RequiredArgsConstructor;
@@ -942,36 +954,193 @@ public class MaintenanceService {
     }
 
     @Transactional
-public void submitRequestByHq(LoginUser loginUser, Long id) {
-    if (loginUser == null || loginUser.role() != UserRole.HQ) {
-        throw new ExceptionApi403("HQ만 제출할 수 있습니다.");
+    public void submitRequestByHq(LoginUser loginUser, Long id) {
+        if (loginUser == null || loginUser.role() != UserRole.HQ) {
+            throw new ExceptionApi403("HQ만 제출할 수 있습니다.");
+        }
+
+        Maintenance m = findByIdOrThrow(id);
+
+        // ✅ HQ + DRAFT면 제출 가능 (requester_id 무관)
+        if (m.getStatus() != MaintenanceStatus.DRAFT) {
+            throw new ExceptionApi400("제출할 수 없는 상태입니다. status=" + m.getStatus());
+        }
+
+        // ✅ vendor 자동배정
+        User vendor = userRepository.findById(43)
+                .orElseThrow(() -> new ExceptionApi404("고정 업체(VENDOR=43) 없음"));
+        m.setVendor(vendor);
+
+        // ✅ 제출 시점 기록
+        m.setSubmittedAt(LocalDateTime.now());
+
+        // ✅ 곧바로 견적 단계로
+        changeStatusWithNotify(m, MaintenanceStatus.ESTIMATING);
+
+        // ✅ HQ 승인 정보
+        User hqUser = loadUser(loginUser);
+        m.setRequestApprovedBy(hqUser);
+        m.setRequestApprovedAt(LocalDateTime.now());
+        m.setRequestRejectedReason(null);
     }
 
-    Maintenance m = findByIdOrThrow(id);
+    public Page<Maintenance> getOpsList(
+            LoginUser loginUser,
+            MaintenanceStatus status,
+            MaintenanceCategory category,
+            Long branchId,
+            String yearMonth, // "YYYY-MM"
+            Pageable pageable) {
 
-    // ✅ HQ + DRAFT면 제출 가능 (requester_id 무관)
-    if (m.getStatus() != MaintenanceStatus.DRAFT) {
-        throw new ExceptionApi400("제출할 수 없는 상태입니다. status=" + m.getStatus());
+        if (loginUser == null ||
+                !(loginUser.role() == UserRole.HQ || loginUser.role() == UserRole.VENDOR)) {
+            throw new ExceptionApi403("HQ 또는 VENDOR 권한이 필요합니다.");
+        }
+
+        LocalDateTime from = null;
+        LocalDateTime to = null;
+
+        if (yearMonth != null && !yearMonth.isBlank()) {
+            // "2026-01" 형태
+            var ym = java.time.YearMonth.parse(yearMonth.trim());
+            from = ym.atDay(1).atStartOfDay();
+            to = ym.plusMonths(1).atDay(1).atStartOfDay();
+        }
+
+        return maintenanceRepository.searchForOps(status, category, branchId, from, to, pageable);
     }
 
-    // ✅ vendor 자동배정
-    User vendor = userRepository.findById(43)
-            .orElseThrow(() -> new ExceptionApi404("고정 업체(VENDOR=43) 없음"));
-    m.setVendor(vendor);
+    @Transactional(readOnly = true)
+    public MaintenanceResponse.DetailDTO getDetailDtoForOps(LoginUser currentUser, Long id) {
 
-    // ✅ 제출 시점 기록
-    m.setSubmittedAt(LocalDateTime.now());
+        if (currentUser == null ||
+                !(currentUser.role() == UserRole.HQ || currentUser.role() == UserRole.VENDOR)) {
+            throw new ExceptionApi403("HQ 또는 VENDOR 권한이 필요합니다.");
+        }
 
-    // ✅ 곧바로 견적 단계로
-    changeStatusWithNotify(m, MaintenanceStatus.ESTIMATING);
+        Maintenance m = maintenanceRepository.findDetailById(id)
+                .orElseThrow(() -> new ExceptionApi404("해당 요청이 없습니다."));
 
-    // ✅ HQ 승인 정보
-    User hqUser = loadUser(loginUser);
-    m.setRequestApprovedBy(hqUser);
-    m.setRequestApprovedAt(LocalDateTime.now());
-    m.setRequestRejectedReason(null);
-}
+        // ✅ HQ/VENDOR는 기존 toDetailDTO 그대로 사용
+        // (지점만 숨김 정책은 forBranch에서만 적용 중)
+        return toDetailDTO(m);
+    }
 
+    @Transactional(readOnly = true)
+    public byte[] exportOpsExcel(
+            LoginUser loginUser,
+            MaintenanceStatus status,
+            MaintenanceCategory category,
+            Long branchId,
+            String yearMonth) {
+        if (loginUser == null ||
+                !(loginUser.role() == UserRole.HQ || loginUser.role() == UserRole.VENDOR)) {
+            throw new ExceptionApi403("HQ 또는 VENDOR 권한이 필요합니다.");
+        }
 
+        LocalDateTime from = null;
+        LocalDateTime to = null;
+        if (yearMonth != null && !yearMonth.isBlank()) {
+            YearMonth ym = YearMonth.parse(yearMonth.trim());
+            from = ym.atDay(1).atStartOfDay();
+            to = ym.plusMonths(1).atDay(1).atStartOfDay();
+        }
+
+        var pageable = PageRequest.of(0, 20000, Sort.by(Sort.Direction.DESC, "createdAt"));
+        var page = maintenanceRepository.searchForOps(status, category, branchId, from, to, pageable);
+        var rows = page.getContent();
+
+        try (Workbook wb = new XSSFWorkbook()) {
+            Sheet sheet = wb.createSheet("requests");
+
+            // ================= 헤더 스타일 =================
+            Font headerFont = wb.createFont();
+            headerFont.setBold(true);
+
+            CellStyle headerStyle = wb.createCellStyle();
+            headerStyle.setFont(headerFont);
+            headerStyle.setFillForegroundColor(IndexedColors.GREY_25_PERCENT.getIndex());
+            headerStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+            headerStyle.setBorderBottom(BorderStyle.THIN);
+
+            // ================= 헤더 (ID, 요청자 제거) =================
+            String[] headers = {
+     
+                    "고유번호",
+                    "지점",
+                    "제목",
+                    "카테고리",
+                    "상태",
+                    "생성일",
+                    "제출일",
+                    "작업시작일",
+                    "작업종료일"
+            };
+
+            Row headerRow = sheet.createRow(0);
+            for (int i = 0; i < headers.length; i++) {
+                Cell c = headerRow.createCell(i);
+                c.setCellValue(headers[i]);
+                c.setCellStyle(headerStyle);
+            }
+
+            DateTimeFormatter df = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+
+            // ================= 데이터 =================
+            int rowIdx = 1;
+            int seq = 1;
+
+            for (Maintenance m : rows) {
+                Row row = sheet.createRow(rowIdx++);
+                int c = 0;
+
+                row.createCell(c++).setCellValue(m.getId()); // ✅ DB ID (노출)
+
+                row.createCell(c++).setCellValue(
+                        m.getBranch() == null ? "" : safe(m.getBranch().getBranchName()));
+                row.createCell(c++).setCellValue(safe(m.getTitle()));
+                row.createCell(c++).setCellValue(
+                        m.getCategory() == null ? "" : m.getCategory().getDisplayName());
+                row.createCell(c++).setCellValue(
+                        m.getStatus() == null ? "" : m.getStatus().kr());
+                row.createCell(c++).setCellValue(
+                        m.getCreatedAt() == null ? "" : m.getCreatedAt().toLocalDate().format(df));
+                row.createCell(c++).setCellValue(
+                        m.getSubmittedAt() == null ? "" : m.getSubmittedAt().toLocalDate().format(df));
+                row.createCell(c++).setCellValue(
+                        m.getWorkStartDate() == null ? "" : m.getWorkStartDate().format(df));
+                row.createCell(c++).setCellValue(
+                        m.getWorkEndDate() == null ? "" : m.getWorkEndDate().format(df));
+            }
+
+            // ================= 컬럼 너비 고정 =================
+            int[] widths = {
+                    18,
+                    18, // 지점
+                    30, // 제목
+                    16, // 카테고리
+                    16, // 상태
+                    14, // 생성일
+                    14, // 제출일
+                    14, // 작업시작일
+                    14 // 작업종료일
+            };
+            for (int i = 0; i < widths.length; i++) {
+                sheet.setColumnWidth(i, widths[i] * 256);
+            }
+
+            ByteArrayOutputStream bos = new ByteArrayOutputStream();
+            wb.write(bos);
+            return bos.toByteArray();
+
+        } catch (Exception e) {
+            throw new ExceptionApi400("엑셀 생성 실패: " + e.getMessage());
+        }
+    }
+
+    // ✅ null-safe string helper (이미 있으면 삭제하고 기존 거 써도 됨)
+    private String safe(String s) {
+        return s == null ? "" : s;
+    }
 
 }

@@ -11,6 +11,7 @@ import com.juvis.juvis._core.error.ex.ExceptionApi400;
 import com.juvis.juvis._core.error.ex.ExceptionApi401;
 import com.juvis.juvis._core.error.ex.ExceptionApi403;
 import com.juvis.juvis._core.error.ex.ExceptionApi404;
+import com.juvis.juvis._core.error.ex.ExceptionApi500;
 import com.juvis.juvis._core.util.JwtUtil;
 import com.juvis.juvis.branch.Branch;
 import com.juvis.juvis.branch.BranchRepository;
@@ -29,54 +30,72 @@ public class UserService {
     private final BCryptPasswordEncoder bCryptPasswordEncoder;
 
     @Transactional(noRollbackFor = { ExceptionApi401.class, ExceptionApi403.class })
-    public UserResponse.LoginDTO login(UserRequest.LoginDTO loginDTO) {
+public UserResponse.LoginDTO login(UserRequest.LoginDTO loginDTO) {
 
-        User userPS = userRepository.findByUsername(loginDTO.getUsername())
-                .orElseThrow(() -> new ExceptionApi401("유저네임 혹은 비밀번호가 틀렸습니다"));
+    // ✅ 0) 요청 바인딩/파싱 이슈 방어 (500 방지)
+    if (loginDTO == null) {
+        throw new ExceptionApi400("요청 바디가 비어있습니다.");
+    }
+    if (loginDTO.getUsername() == null || loginDTO.getUsername().isBlank()) {
+        throw new ExceptionApi400("username:아이디는 필수 입력 값입니다");
+    }
+    if (loginDTO.getPassword() == null || loginDTO.getPassword().isBlank()) {
+        throw new ExceptionApi400("password:비밀번호는 필수 입력 값입니다");
+    }
 
-        // ✅ 0) 영구 잠금 계정 차단 (최우선)
-        if (userPS.isAccountLocked()) {
-            throw new ExceptionApi403("비밀번호 5회 오류로 계정이 잠금 처리되었습니다. 관리자에게 초기화를 요청하세요.");
-        }
+    // (선택) 공백 제거 - 모바일/웹 입력 실수 방지
+    final String username = loginDTO.getUsername().trim();
+    final String rawPassword = loginDTO.getPassword();
 
-        // ✅ 1) 비활성 계정 차단
-        if (!userPS.isEnabled()) {
-            throw new ExceptionApi403("비활성화된 계정입니다. 본사에 문의하세요.");
-        }
+    // ✅ 1) 사용자 조회
+    User userPS = userRepository.findByUsername(username)
+            .orElseThrow(() -> new ExceptionApi401("유저네임 혹은 비밀번호가 틀렸습니다"));
 
-        // ✅ 2) 비밀번호 검증
-        boolean isSame = bCryptPasswordEncoder.matches(loginDTO.getPassword(), userPS.getPassword());
-        if (!isSame) {
-            // 실패 카운트 증가
-            int nextFail = userPS.getLoginFailCount() + 1;
-            userPS.setLoginFailCount(nextFail);
+    // ✅ 2) 영구 잠금 계정 차단
+    if (userPS.isAccountLocked()) {
+        throw new ExceptionApi403("비밀번호 5회 오류로 계정이 잠금 처리되었습니다. 관리자에게 초기화를 요청하세요.");
+    }
 
-            // 5회 이상이면 영구 잠금
-            if (nextFail >= 5) {
-                userPS.setAccountLocked(true);
-                userRepository.save(userPS);
+    // ✅ 3) 비활성 계정 차단
+    if (!userPS.isEnabled()) {
+        throw new ExceptionApi403("비활성화된 계정입니다. 본사에 문의하세요.");
+    }
 
-                throw new ExceptionApi403("비밀번호 5회 오류로 계정이 잠금(영구) 처리되었습니다. 관리자에게 초기화를 요청하세요.");
-            }
+    // ✅ 4) 비밀번호 검증
+    boolean isSame = bCryptPasswordEncoder.matches(rawPassword, userPS.getPassword());
+    if (!isSame) {
+        int nextFail = userPS.getLoginFailCount() + 1;
+        userPS.setLoginFailCount(nextFail);
 
+        if (nextFail >= 5) {
+            userPS.setAccountLocked(true);
             userRepository.save(userPS);
-
-            // 남은 횟수 안내(원하면 메시지 유지해도 됨)
-            int left = 5 - nextFail;
-            throw new ExceptionApi401("유저네임 혹은 비밀번호가 틀렸습니다. 남은 시도 횟수: " + left);
+            throw new ExceptionApi403("비밀번호 5회 오류로 계정이 잠금(영구) 처리되었습니다. 관리자에게 초기화를 요청하세요.");
         }
 
-        // ✅ 3) 성공 시 실패 카운트 초기화 (잠금은 해제하지 않음)
-        if (userPS.getLoginFailCount() != 0) {
-            userPS.setLoginFailCount(0);
-            userRepository.save(userPS);
-        }
+        userRepository.save(userPS);
 
+        int left = 5 - nextFail;
+        throw new ExceptionApi401("유저네임 혹은 비밀번호가 틀렸습니다. 남은 시도 횟수: " + left);
+    }
+
+    // ✅ 5) 성공 시 실패 카운트 초기화
+    if (userPS.getLoginFailCount() != 0) {
+        userPS.setLoginFailCount(0);
+        userRepository.save(userPS);
+    }
+
+    // ✅ 6) 토큰 생성 중 예외도 500 대신 “의미있는 메시지”로
+    try {
         String accessToken = JwtUtil.createAccessToken(userPS);
         String refreshToken = JwtUtil.createRefreshToken(userPS);
-
         return new UserResponse.LoginDTO(accessToken, refreshToken, userPS);
+    } catch (Exception e) {
+        log.error("[LOGIN] token create failed. userId={}, username={}", userPS.getId(), userPS.getUsername(), e);
+        throw new ExceptionApi500("토큰 생성 중 오류가 발생했습니다. 관리자에게 문의하세요.");
     }
+}
+
 
     @Transactional
     public UserResponse.JoinDTO joinBranch(UserRequest.BranchJoinDTO reqDTO, LoginUser loginUser) {

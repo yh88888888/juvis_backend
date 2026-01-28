@@ -1,4 +1,4 @@
-package com.juvis.juvis.maintenance_photo;
+package com.juvis.juvis.maintenance_vendor.maintenance_photo;
 
 import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;

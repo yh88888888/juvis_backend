@@ -1,4 +1,4 @@
-package com.juvis.juvis.maintenance_photo;
+package com.juvis.juvis.maintenance_vendor.maintenance_photo;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -6,8 +6,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.juvis.juvis._core.util.Resp;
-import com.juvis.juvis.maintenance_photo.Presign.PresignGetRequest;
-import com.juvis.juvis.maintenance_photo.Presign.PresignRequest;
+import com.juvis.juvis.maintenance_vendor.maintenance_photo.Presign.PresignRequest;
 
 import lombok.*;
 
