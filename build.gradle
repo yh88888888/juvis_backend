@@ -1,64 +1,65 @@
 plugins {
-	id 'java'
-	id 'org.springframework.boot' version '3.5.7'
-	id 'io.spring.dependency-management' version '1.1.6'
+    id 'java'
+    id 'org.springframework.boot' version '3.5.7'
+    id 'io.spring.dependency-management' version '1.1.6'
 }
 
 group = 'com.juvis'
 version = '0.0.1-SNAPSHOT'
 
 java {
-	toolchain {
-		languageVersion = JavaLanguageVersion.of(21)
-	}
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
 }
 
 repositories {
-	mavenCentral()
+    mavenCentral()
 }
 
 dependencies {
-	// Spring
-	implementation 'org.springframework.boot:spring-boot-starter-web'
-	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
-	implementation 'org.springframework.boot:spring-boot-starter-validation'
+    // Spring
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+    implementation 'org.springframework.boot:spring-boot-starter-actuator' // ✅ actuator/health 사용
 
-	// Security / Auth
-	implementation 'org.springframework.boot:spring-boot-starter-security'
-	implementation 'com.auth0:java-jwt:4.3.0'
-	implementation 'org.mindrot:jbcrypt:0.4'
+    // Security / Auth
+    implementation 'org.springframework.boot:spring-boot-starter-security'
+    implementation 'com.auth0:java-jwt:4.3.0'
+    implementation 'org.mindrot:jbcrypt:0.4'
 
-	// DB Driver
-	runtimeOnly 'com.mysql:mysql-connector-j:9.1.0'
+    // DB Driver
+    runtimeOnly 'com.mysql:mysql-connector-j:9.1.0'
 
-	// AOP
-	implementation 'org.springframework.boot:spring-boot-starter-aop'
+    // AOP
+    implementation 'org.springframework.boot:spring-boot-starter-aop'
 
-	// Flyway
-	implementation 'org.flywaydb:flyway-core'
-	implementation 'org.flywaydb:flyway-mysql'
+    // Flyway
+    implementation 'org.flywaydb:flyway-core'
+    implementation 'org.flywaydb:flyway-mysql'
 
-	// Utils / Lombok
-	implementation 'org.apache.commons:commons-lang3:3.12.0'
-	compileOnly 'org.projectlombok:lombok'
-	annotationProcessor 'org.projectlombok:lombok'
+    // Utils / Lombok
+    implementation 'org.apache.commons:commons-lang3:3.12.0'
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+    testCompileOnly 'org.projectlombok:lombok'
+    testAnnotationProcessor 'org.projectlombok:lombok'
 
-	// AWS S3
-	implementation "io.awspring.cloud:spring-cloud-aws-starter-s3:3.4.0"
+    // AWS S3
+    implementation "io.awspring.cloud:spring-cloud-aws-starter-s3:3.4.0"
 
-	// Firebase
-	implementation 'com.google.firebase:firebase-admin:9.2.0'
+    // Firebase
+    implementation 'com.google.firebase:firebase-admin:9.2.0'
 
-	// ✅ Test (핵심)
-	testImplementation 'org.springframework.boot:spring-boot-starter-test'
-	testImplementation 'com.h2database:h2'
+    // Apache POI
+    implementation 'org.apache.poi:poi-ooxml:5.2.5'
 
-	testCompileOnly 'org.projectlombok:lombok'
-	testAnnotationProcessor 'org.projectlombok:lombok'
-
-	implementation 'org.apache.poi:poi-ooxml:5.2.5'
+    // Test
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'com.h2database:h2'
 }
 
 tasks.named('test') {
-	useJUnitPlatform()
+    useJUnitPlatform()
 }

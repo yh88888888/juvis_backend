@@ -31,5 +31,5 @@ Thumbs.db
 
 
 
-/src/main/resources/firebase/serviceAccount.json
+/src/main/resources/firebase/serviceAccount
 /src/main/resources/firebase/*.json
