@@ -10,13 +10,8 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(
-    name = "maintenance_estimate_attempt",
-    uniqueConstraints = @UniqueConstraint(
-        name = "uk_maintenance_attempt",
-        columnNames = {"maintenance_id", "attempt_no"}
-    )
-)
+@Table(name = "maintenance_estimate_attempt", uniqueConstraints = @UniqueConstraint(name = "uk_maintenance_attempt", columnNames = {
+        "maintenance_id", "attempt_no" }))
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor
@@ -46,8 +41,8 @@ public class MaintenanceEstimateAttempt {
     @Column(name = "estimate_comment", columnDefinition = "TEXT")
     private String estimateComment;
 
-    private LocalDate workStartDate;
-    private LocalDate workEndDate;
+    private LocalDateTime workStartDate;
+    private LocalDateTime workEndDate;
 
     @Column(name = "vendor_submitted_at", nullable = false)
     private LocalDateTime vendorSubmittedAt;
@@ -98,11 +93,10 @@ public class MaintenanceEstimateAttempt {
     public void updateEstimate(
             String amount,
             String comment,
-            LocalDate start,
-            LocalDate end,
+            LocalDateTime start,
+            LocalDateTime end,
             VendorWorker worker,
-            LocalDateTime submittedAt
-    ) {
+            LocalDateTime submittedAt) {
         this.estimateAmount = amount;
         this.estimateComment = comment;
         this.workStartDate = start;
@@ -118,10 +112,9 @@ public class MaintenanceEstimateAttempt {
             int attemptNo,
             String amount,
             String comment,
-            LocalDate start,
-            LocalDate end,
-            LocalDateTime submittedAt
-    ) {
+            LocalDateTime start,
+            LocalDateTime end,
+            LocalDateTime submittedAt) {
         return MaintenanceEstimateAttempt.builder()
                 .maintenance(m)
                 .attemptNo(attemptNo)

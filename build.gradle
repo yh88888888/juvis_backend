@@ -22,7 +22,7 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
     implementation 'org.springframework.boot:spring-boot-starter-validation'
-    implementation 'org.springframework.boot:spring-boot-starter-actuator' // ✅ actuator/health 사용
+    implementation 'org.springframework.boot:spring-boot-starter-actuator' // ✅ 추가
 
     // Security / Auth
     implementation 'org.springframework.boot:spring-boot-starter-security'
@@ -43,8 +43,6 @@ dependencies {
     implementation 'org.apache.commons:commons-lang3:3.12.0'
     compileOnly 'org.projectlombok:lombok'
     annotationProcessor 'org.projectlombok:lombok'
-    testCompileOnly 'org.projectlombok:lombok'
-    testAnnotationProcessor 'org.projectlombok:lombok'
 
     // AWS S3
     implementation "io.awspring.cloud:spring-cloud-aws-starter-s3:3.4.0"
@@ -58,6 +56,9 @@ dependencies {
     // Test
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'com.h2database:h2'
+
+    testCompileOnly 'org.projectlombok:lombok'
+    testAnnotationProcessor 'org.projectlombok:lombok'
 }
 
 tasks.named('test') {

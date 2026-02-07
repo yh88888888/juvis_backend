@@ -1,74 +1,80 @@
--- Schema
--- CREATE SCHEMA IF NOT EXISTS maintenance_app DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+-- =========================================================
+-- maintenance_app schema (ENTITY 기준 정합성 반영본)
+-- - work_start_date/work_end_date: DATE -> DATETIME(6)
+-- =========================================================
+
+-- (선택) 스키마/DB 생성
+-- CREATE DATABASE IF NOT EXISTS maintenance_app
+--   DEFAULT CHARACTER SET utf8mb4
+--   COLLATE utf8mb4_0900_ai_ci;
 -- USE maintenance_app;
 
--- 1) 기존 DB 삭제
--- DROP DATABASE IF EXISTS maintenance_app;         
-
--- 2) 새로 생성
+-- (선택) 기존 DB 삭제 후 재생성
+-- DROP DATABASE IF EXISTS maintenance_app;
 -- CREATE DATABASE maintenance_app
 --   DEFAULT CHARACTER SET utf8mb4
 --   COLLATE utf8mb4_0900_ai_ci;
-
--- 3) 사용 DB 선택 (선택사항)
 -- USE maintenance_app;
 
-
-
+-- =========================================================
 -- 1) branch
+-- =========================================================
 CREATE TABLE branch (
   branch_id     BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-  branch_name   VARCHAR(100)    NOT NULL,         -- 지점명
-  phone         VARCHAR(20),                      -- 지점 대표번호
-  address_name  VARCHAR(200),                     -- 지점 주소
+  branch_name   VARCHAR(100)    NOT NULL,
+  phone         VARCHAR(20),
+  address_name  VARCHAR(200),
   created_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (branch_id),
-  UNIQUE KEY uk_branch_name (branch_name)         -- 지점명 유니크
-) ENGINE=InnoDB;
+  UNIQUE KEY uk_branch_name (branch_name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- 2) user
+-- =========================================================
+-- 2) user_tb
+-- =========================================================
 CREATE TABLE user_tb (
   user_id    BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-  username   VARCHAR(50)  NOT NULL,               -- 로그인 아이디
-  password   VARCHAR(255) NOT NULL,               -- 비밀번호(해시)
-  name       VARCHAR(100) NULL,                   -- 사용자 이름
-  phone      VARCHAR(20)  NULL,                   -- 사용자 개인 휴대폰 번호
+  username   VARCHAR(50)  NOT NULL,
+  password   VARCHAR(255) NOT NULL,
+  name       VARCHAR(100) NULL,
+  phone      VARCHAR(20)  NULL,
   address    VARCHAR(255) NULL,
+
   role       ENUM('BRANCH','HQ','VENDOR') NOT NULL DEFAULT 'BRANCH',
+  is_active  TINYINT(1) NOT NULL DEFAULT 1,
 
-  is_active  TINYINT(1) NOT NULL DEFAULT 1,       -- 활성/비활성
-
-  -- ✅ 초기 비밀번호(1234)로 생성/초기화된 계정이면 true
   must_change_password TINYINT(1) NOT NULL DEFAULT 1,
 
-  -- ✅ 로그인 5회 실패 영구잠금용
-  login_fail_count INT NOT NULL DEFAULT 0,        -- 로그인 실패 횟수
-  account_locked   TINYINT(1) NOT NULL DEFAULT 0, -- 영구 잠금 여부(1이면 로그인 차단)
+  login_fail_count INT NOT NULL DEFAULT 0,
+  account_locked   TINYINT(1) NOT NULL DEFAULT 0,
 
-  branch_id  BIGINT UNSIGNED NULL,                -- BRANCH일 경우 지점 FK
+  branch_id  BIGINT UNSIGNED NULL,
+
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
   PRIMARY KEY (user_id),
   UNIQUE KEY uk_user_username (username),
+
   KEY idx_user_role (role),
   KEY idx_user_branch (branch_id),
   KEY idx_user_must_change_password (must_change_password),
-
-  -- (선택) HQ에서 잠금 계정만 빠르게 필터링할 때 유용
   KEY idx_user_account_locked (account_locked),
 
   CONSTRAINT fk_user_branch
     FOREIGN KEY (branch_id) REFERENCES branch(branch_id)
     ON UPDATE RESTRICT ON DELETE SET NULL
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- =========================================================
+-- 3) vendor_worker
+-- =========================================================
 CREATE TABLE vendor_worker (
   worker_id   BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-  vendor_id   BIGINT UNSIGNED NOT NULL,     -- user_tb.user_id (벤더 계정)
+  vendor_id   BIGINT UNSIGNED NOT NULL,
 
-  team_label  VARCHAR(50)  NULL,            -- 예: '1팀'
-  name        VARCHAR(100) NOT NULL,        -- 예: '홍길동'
+  team_label  VARCHAR(50)  NULL,
+  name        VARCHAR(100) NOT NULL,
   phone       VARCHAR(30)  NULL,
 
   is_active   TINYINT(1) NOT NULL DEFAULT 1,
@@ -85,15 +91,16 @@ CREATE TABLE vendor_worker (
     ON UPDATE RESTRICT ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-
--- 
+-- =========================================================
+-- 4) maintenance_request
+-- =========================================================
 CREATE TABLE maintenance_request (
   request_id     BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   branch_id      BIGINT UNSIGNED NOT NULL,
   requester_id   BIGINT UNSIGNED NOT NULL,
 
   title          VARCHAR(200)    NOT NULL,
-  description    TEXT,
+  description    LONGTEXT,
 
   status         ENUM(
     'DRAFT',
@@ -107,28 +114,31 @@ CREATE TABLE maintenance_request (
   ) NOT NULL DEFAULT 'DRAFT',
 
   category ENUM(
-  'PAINTING',            -- 도장
-  'WALLPAPER',           -- 도배
-  'DOOR',                -- 도어
-  'DOOR_LOCK',           -- 도어락
-  'FURNITURE_REPAIR',    -- 가구수리
-  'SANITARY_FIXTURE',    -- 세면대 및 샤워기
-  'DRAINAGE',            -- 배수
-  'ELECTRICAL_OUTLET',   -- 전등 및 콘센트
-  'LEAK',                -- 누수
-  'AUTOMATIC_DOOR',      -- 자동문
-  'CCTV',                -- CCTV
-  'ETC'                  -- 기타
-) NOT NULL DEFAULT 'ETC',
+    'PAINTING',
+    'WALLPAPER',
+    'DOOR',
+    'DOOR_LOCK',
+    'FURNITURE_REPAIR',
+    'SANITARY_FIXTURE',
+    'DRAINAGE',
+    'ELECTRICAL_OUTLET',
+    'LEAK',
+    'AUTOMATIC_DOOR',
+    'CCTV',
+    'ETC'
+  ) NOT NULL DEFAULT 'ETC',
 
-  vendor_id      BIGINT UNSIGNED NULL,
-  vendor_worker_id BIGINT UNSIGNED NULL,   -- ✅ 추가: 벤더 작업자(팀/담당) 선택값
+  vendor_id        BIGINT UNSIGNED NULL,
+  vendor_worker_id BIGINT UNSIGNED NULL,
 
   -- (레거시/참조용) 현재는 attempt 테이블이 정본
   estimate_amount         DECIMAL(15,2) NULL,
-  estimate_comment        TEXT         NULL,
-  work_start_date         DATE         NULL,
-  work_end_date           DATE         NULL,
+  estimate_comment        TINYTEXT         NULL,
+
+  -- ✅ 엔티티(LocalDateTime) 기준으로 DATETIME(6)
+  work_start_date         DATETIME(6)  NULL,
+  work_end_date           DATETIME(6)  NULL,
+
   estimate_resubmit_count INT NOT NULL DEFAULT 0,
 
   request_approved_comment VARCHAR(500) NULL,
@@ -136,18 +146,18 @@ CREATE TABLE maintenance_request (
   request_rejected_reason  VARCHAR(500) NULL,
   estimate_rejected_reason VARCHAR(500) NULL,
 
-  result_comment     TEXT NULL,
+  result_comment     TINYTEXT NULL,
   result_photo_url   VARCHAR(2048) NULL,
-  work_completed_at  DATETIME NULL,
+  work_completed_at  DATETIME(6) NULL,
 
-  submitted_at         DATETIME NULL,
-  vendor_submitted_at  DATETIME NULL,
+  submitted_at         DATETIME(6) NULL,
+  vendor_submitted_at  DATETIME(6) NULL,
 
   request_approved_by BIGINT UNSIGNED NULL,
-  request_approved_at DATETIME NULL,
+  request_approved_at DATETIME(6) NULL,
 
   estimate_approved_by BIGINT UNSIGNED NULL,
-  estimate_approved_at DATETIME NULL,
+  estimate_approved_at DATETIME(6) NULL,
 
   created_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -158,7 +168,7 @@ CREATE TABLE maintenance_request (
   KEY idx_mr_status (status),
   KEY idx_mr_category (category),
   KEY idx_mr_vendor (vendor_id),
-  KEY idx_mr_vendor_worker (vendor_worker_id),  -- ✅ 추가
+  KEY idx_mr_vendor_worker (vendor_worker_id),
   KEY idx_mr_requester (requester_id),
   KEY idx_mr_created (created_at),
 
@@ -174,7 +184,7 @@ CREATE TABLE maintenance_request (
     FOREIGN KEY (vendor_id) REFERENCES user_tb(user_id)
     ON UPDATE RESTRICT ON DELETE SET NULL,
 
-  CONSTRAINT fk_mr_vendor_worker              -- ✅ 추가
+  CONSTRAINT fk_mr_vendor_worker
     FOREIGN KEY (vendor_worker_id) REFERENCES vendor_worker(worker_id)
     ON UPDATE RESTRICT ON DELETE SET NULL,
 
@@ -187,9 +197,9 @@ CREATE TABLE maintenance_request (
     ON UPDATE RESTRICT ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-
-
--- 4) estimate
+-- =========================================================
+-- 5) estimate (legacy)
+-- =========================================================
 CREATE TABLE estimate (
   estimate_id   BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   request_id    BIGINT UNSIGNED NOT NULL,
@@ -199,18 +209,24 @@ CREATE TABLE estimate (
   status        ENUM('SUBMITTED','APPROVED','REJECTED') NOT NULL DEFAULT 'SUBMITTED',
   created_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
   PRIMARY KEY (estimate_id),
   KEY idx_est_req (request_id),
   KEY idx_est_vendor (vendor_id),
   KEY idx_est_status (status),
+
   CONSTRAINT fk_est_req
     FOREIGN KEY (request_id) REFERENCES maintenance_request(request_id)
     ON UPDATE RESTRICT ON DELETE CASCADE,
+
   CONSTRAINT fk_est_vendor
     FOREIGN KEY (vendor_id) REFERENCES user_tb(user_id)
     ON UPDATE RESTRICT ON DELETE RESTRICT
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- =========================================================
+-- 6) maintenance_estimate_attempt (정본)
+-- =========================================================
 CREATE TABLE maintenance_estimate_attempt (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
 
@@ -219,23 +235,25 @@ CREATE TABLE maintenance_estimate_attempt (
 
   estimate_amount VARCHAR(50) NOT NULL,
   estimate_comment TEXT NULL,
-  work_start_date DATE NULL,
-  work_end_date DATE NULL,
 
-  vendor_submitted_at DATETIME NOT NULL,
+  -- ✅ 엔티티(LocalDateTime) 기준으로 DATETIME(6)
+  work_start_date DATETIME(6) NULL,
+  work_end_date   DATETIME(6) NULL,
 
-  -- ✅ 작업자 스냅샷(선택)
+  vendor_submitted_at DATETIME(6) NOT NULL,
+
+  -- 작업자 스냅샷
   worker_id BIGINT UNSIGNED NULL,
   worker_team_label VARCHAR(50) NULL,
   worker_name VARCHAR(100) NULL,
   worker_phone VARCHAR(50) NULL,
 
-  hq_decision VARCHAR(20) NOT NULL DEFAULT 'PENDING', -- PENDING/APPROVED/REJECTED
-  hq_decided_at DATETIME NULL,
+  hq_decision VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+  hq_decided_at DATETIME(6) NULL,
   hq_decided_by_name VARCHAR(100) NULL,
   hq_reject_reason TEXT NULL,
 
-  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
 
   PRIMARY KEY (id),
 
@@ -250,36 +268,43 @@ CREATE TABLE maintenance_estimate_attempt (
   INDEX idx_mea_mid (maintenance_id),
   INDEX idx_mea_mid_attempt (maintenance_id, attempt_no),
   INDEX idx_mea_hq_decision (hq_decision),
-
-  -- ✅ 작업자 조회/필터 대비(선택)
   INDEX idx_mea_worker_id (worker_id)
-
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- 5) work_order
+-- =========================================================
+-- 7) work_order
+-- =========================================================
 CREATE TABLE work_order (
   work_id     BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   request_id  BIGINT UNSIGNED NOT NULL,
   vendor_id   BIGINT UNSIGNED NOT NULL,
+
   start_date  DATE,
   end_date    DATE,
+
   status      ENUM('IN_PROGRESS','COMPLETED') NOT NULL DEFAULT 'IN_PROGRESS',
   report      TEXT,
+
   created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
   PRIMARY KEY (work_id),
   KEY idx_wo_req (request_id),
   KEY idx_wo_vendor (vendor_id),
   KEY idx_wo_status (status),
+
   CONSTRAINT fk_wo_req
     FOREIGN KEY (request_id) REFERENCES maintenance_request(request_id)
     ON UPDATE RESTRICT ON DELETE CASCADE,
+
   CONSTRAINT fk_wo_vendor
     FOREIGN KEY (vendor_id) REFERENCES user_tb(user_id)
     ON UPDATE RESTRICT ON DELETE RESTRICT
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- 6) Photo attachment
+-- =========================================================
+-- 8) maintenance_photo
+-- =========================================================
 CREATE TABLE maintenance_photo (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
 
@@ -291,7 +316,7 @@ CREATE TABLE maintenance_photo (
   photo_type VARCHAR(20) NOT NULL COMMENT 'REQUEST/ESTIMATE/RESULT',
   attempt_no INT NULL COMMENT 'ESTIMATE only: 1 or 2, otherwise NULL',
 
-  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
 
   PRIMARY KEY (id),
 
@@ -306,26 +331,32 @@ CREATE TABLE maintenance_photo (
   INDEX idx_mp_mid_type_attempt (maintenance_id, photo_type, attempt_no)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-
--- 7) comment
-CREATE TABLE comment (
+-- =========================================================
+-- 9) comment (예약어 안전 처리)
+-- =========================================================
+CREATE TABLE `comment` (
   comment_id  BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   request_id  BIGINT UNSIGNED NOT NULL,
   user_id     BIGINT UNSIGNED NOT NULL,
   content     TEXT            NOT NULL,
   created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
   PRIMARY KEY (comment_id),
   KEY idx_c_req (request_id),
   KEY idx_c_user (user_id),
+
   CONSTRAINT fk_c_req
     FOREIGN KEY (request_id) REFERENCES maintenance_request(request_id)
     ON UPDATE RESTRICT ON DELETE CASCADE,
+
   CONSTRAINT fk_c_user
     FOREIGN KEY (user_id) REFERENCES user_tb(user_id)
     ON UPDATE RESTRICT ON DELETE RESTRICT
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- 8) notification (엔티티 기준 최종본)
+-- =========================================================
+-- 10) notification
+-- =========================================================
 CREATE TABLE notification (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
 
@@ -335,19 +366,16 @@ CREATE TABLE notification (
   status VARCHAR(50) NOT NULL,
   event_type VARCHAR(30) NOT NULL,
 
-  -- ✅ dedupe용 키
   attempt_no INT NOT NULL,
 
   message VARCHAR(255) NOT NULL,
 
   is_read BOOLEAN NOT NULL DEFAULT FALSE,
-  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
 
   KEY idx_notif_user_created (user_id, created_at),
   KEY idx_notif_user_read (user_id, is_read),
 
-  -- ✅ 중복 방지 (상태변경은 attempt_no=0 고정이라 status별 1번만 쌓임)
-  -- ✅ 견적수정은 attempt_no를 매번 다르게 넣으면 매번 신규 생성됨
   UNIQUE KEY uq_notif_dedupe (
     user_id,
     maintenance_id,
@@ -371,8 +399,9 @@ CREATE TABLE notification (
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_0900_ai_ci;
 
-
--- 9) activity_log
+-- =========================================================
+-- 11) activity_log
+-- =========================================================
 CREATE TABLE activity_log (
   log_id     BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   user_id    BIGINT UNSIGNED NOT NULL,
@@ -380,29 +409,42 @@ CREATE TABLE activity_log (
   action     VARCHAR(100)    NOT NULL,
   details    TEXT,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
   PRIMARY KEY (log_id),
   KEY idx_al_user (user_id),
   KEY idx_al_req (request_id),
   KEY idx_al_created (created_at),
+
   CONSTRAINT fk_al_user
     FOREIGN KEY (user_id) REFERENCES user_tb(user_id)
     ON UPDATE RESTRICT ON DELETE RESTRICT,
+
   CONSTRAINT fk_al_req
     FOREIGN KEY (request_id) REFERENCES maintenance_request(request_id)
     ON UPDATE RESTRICT ON DELETE CASCADE
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- =========================================================
+-- 12) user_device
+-- =========================================================
 CREATE TABLE user_device (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   user_id BIGINT UNSIGNED NOT NULL,
-  platform VARCHAR(20) NOT NULL,       -- ANDROID / IOS
+
+  platform VARCHAR(20) NOT NULL,
   fcm_token VARCHAR(255) NOT NULL,
+
   is_active TINYINT(1) NOT NULL DEFAULT 1,
-  last_seen_at DATETIME NULL,
-  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  last_seen_at DATETIME(6) NULL,
+
+  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+
   PRIMARY KEY (id),
   UNIQUE KEY uq_user_device_token (fcm_token),
-  KEY idx_user_device_user (user_id)
-);
+  KEY idx_user_device_user (user_id),
 
+  CONSTRAINT fk_user_device_user
+    FOREIGN KEY (user_id) REFERENCES user_tb(user_id)
+    ON UPDATE RESTRICT ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

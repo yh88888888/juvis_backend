@@ -877,7 +877,11 @@ public class MaintenanceService {
         }
 
         m.setResultComment(comment);
-        m.setWorkCompletedAt(LocalDateTime.now());
+        LocalDateTime completedAt = (dto.getCompletedAt() != null)
+                ? dto.getCompletedAt()
+                : LocalDateTime.now();
+
+        m.setWorkCompletedAt(completedAt);
         changeStatusWithNotify(m, MaintenanceStatus.COMPLETED);
         maintenanceRepository.save(m);
 
@@ -1065,7 +1069,7 @@ public class MaintenanceService {
 
             // ================= 헤더 (ID, 요청자 제거) =================
             String[] headers = {
-     
+
                     "고유번호",
                     "지점",
                     "제목",

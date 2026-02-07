@@ -4,21 +4,19 @@ import com.juvis.juvis._core.error.ex.*;
 import com.juvis.juvis._core.util.Resp;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
-import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.NoHandlerFoundException;
-import org.springframework.web.servlet.resource.NoResourceFoundException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    // =========================
-    // 커스텀 API 예외
-    // =========================
     @ExceptionHandler(ExceptionApi400.class)
     public ResponseEntity<?> exApi400(ExceptionApi400 e) {
         log.warn(e.getMessage());
@@ -45,35 +43,41 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(ExceptionApi500.class)
     public ResponseEntity<?> exApi500(ExceptionApi500 e) {
-        log.error("알 수 없는 에러 발생: {}", e.getMessage());
+        log.error("API 500: {}", e.getMessage());
         return Resp.fail(HttpStatus.INTERNAL_SERVER_ERROR, e.getMessage());
     }
 
-    // =========================
-    // ✅ 404를 500으로 바꾸지 않도록 별도 처리 (중요)
-    // =========================
-    @ExceptionHandler({ NoHandlerFoundException.class, NoResourceFoundException.class })
-    public ResponseEntity<?> exNotFound(Exception e) {
-        log.warn("404 Not Found: {}", e.getMessage());
+    // ✅ Spring 기본 404는 404로 유지 (Actuator/정적리소스 등 포함)
+    @ExceptionHandler(NoHandlerFoundException.class)
+    public ResponseEntity<?> exNoHandlerFound(NoHandlerFoundException e) {
         return Resp.fail(HttpStatus.NOT_FOUND, "NOT_FOUND");
     }
 
-    // =========================
-    // ✅ 상태코드가 있는 예외는 상태코드 유지 (중요)
-    // =========================
-    @ExceptionHandler(ResponseStatusException.class)
-    public ResponseEntity<?> exResponseStatus(ResponseStatusException e) {
-        HttpStatusCode code = e.getStatusCode();
-        String msg = (e.getReason() != null) ? e.getReason() : "ERROR";
-        log.warn("ResponseStatusException: {} {}", code.value(), msg);
-        return Resp.fail(HttpStatus.valueOf(code.value()), msg);
+    // ✅ 잘못된 HTTP Method (GET/POST 혼동 등)
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<?> exMethodNotSupported(HttpRequestMethodNotSupportedException e) {
+        return Resp.fail(HttpStatus.METHOD_NOT_ALLOWED, "METHOD_NOT_ALLOWED");
     }
 
-    // =========================
-    // 그 외 전부 500
-    // =========================
+    // ✅ Content-Type 문제
+    @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+    public ResponseEntity<?> exMediaType(HttpMediaTypeNotSupportedException e) {
+        return Resp.fail(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "UNSUPPORTED_MEDIA_TYPE");
+    }
+
+    // ✅ 파라미터 누락/타입 오류 등은 400 유지
+    @ExceptionHandler({
+            MissingServletRequestParameterException.class,
+            MethodArgumentTypeMismatchException.class,
+            IllegalArgumentException.class
+    })
+    public ResponseEntity<?> exBadRequest(Exception e) {
+        return Resp.fail(HttpStatus.BAD_REQUEST, "BAD_REQUEST");
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<?> exUnKnown(Exception e) {
+        // ✅ 진짜 서버 에러만 여기로 오게
         log.error("알 수 없는 에러 발생", e);
         return Resp.fail(HttpStatus.INTERNAL_SERVER_ERROR, "관리자에게 문의하세요");
     }

@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
@@ -39,8 +40,8 @@ class MaintenanceResponseDetailDtoTest {
         var a1 = mock(MaintenanceResponse.EstimateAttemptDTO.class);
         when(a1.getEstimateAmount()).thenReturn("10000");
         when(a1.getEstimateComment()).thenReturn("c");
-        when(a1.getWorkStartDate()).thenReturn(LocalDate.of(2026, 1, 7));
-        when(a1.getWorkEndDate()).thenReturn(LocalDate.of(2026, 1, 7));
+        when(a1.getWorkStartDate()).thenReturn(LocalDateTime.of(2026, 1, 7, 0, 0));
+        when(a1.getWorkEndDate()).thenReturn(LocalDateTime.of(2026, 1, 7, 0, 0));
         when(a1.getWorkerName()).thenReturn("작업자A");
         when(a1.getWorkerPhone()).thenReturn("010-1111-2222");
         when(a1.getWorkerTeamLabel()).thenReturn("A팀");

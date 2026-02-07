@@ -14,7 +14,6 @@ import jakarta.validation.Valid;
 
 @RestController
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*")
 public class AuthController {
 
     private final UserService userService;

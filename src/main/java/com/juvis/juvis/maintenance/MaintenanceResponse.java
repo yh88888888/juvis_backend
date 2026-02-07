@@ -16,48 +16,47 @@ import com.juvis.juvis.maintenance_estimate.MaintenanceEstimateAttempt;
 public class MaintenanceResponse {
 
     @Getter
-@AllArgsConstructor
-public static class SimpleDTO {
-    private Long id;
-    private String branchName;
-    private String requesterName;
-    private BigDecimal estimateAmount;
+    @AllArgsConstructor
+    public static class SimpleDTO {
+        private Long id;
+        private String branchName;
+        private String requesterName;
+        private BigDecimal estimateAmount;
 
-    private LocalDate workStartDate;
+        private LocalDateTime workStartDate;
 
-    private String title;
-    private MaintenanceStatus status;
+        private String title;
+        private MaintenanceStatus status;
 
-    // ✅ 추가: Flutter가 읽을 값
-    private String category;      // ex) "PAINTING"
-    private String categoryName;  // ex) "도장"
+        // ✅ 추가: Flutter가 읽을 값
+        private String category; // ex) "PAINTING"
+        private String categoryName; // ex) "도장"
 
-    private LocalDateTime createdAt;
-    private LocalDateTime submittedAt;
+        private LocalDateTime createdAt;
+        private LocalDateTime submittedAt;
 
-    public SimpleDTO(Maintenance m) {
-        this.id = m.getId();
-        this.branchName = m.getBranch() != null ? m.getBranch().getBranchName() : null;
-        this.requesterName = m.getRequester() != null ? m.getRequester().getName() : null;
-        this.estimateAmount = m.getEstimateAmount();
-        this.workStartDate = m.getWorkStartDate();
-        this.title = m.getTitle();
-        this.status = m.getStatus();
+        public SimpleDTO(Maintenance m) {
+            this.id = m.getId();
+            this.branchName = m.getBranch() != null ? m.getBranch().getBranchName() : null;
+            this.requesterName = m.getRequester() != null ? m.getRequester().getName() : null;
+            this.estimateAmount = m.getEstimateAmount();
+            this.workStartDate = m.getWorkStartDate();
+            this.title = m.getTitle();
+            this.status = m.getStatus();
 
-        // ✅ 핵심: category 내려주기 (null-safe)
-        if (m.getCategory() != null) {
-            this.category = m.getCategory().name();           // "PAINTING"
-            this.categoryName = m.getCategory().getDisplayName(); // "도장"
-        } else {
-            this.category = null;
-            this.categoryName = null;
+            // ✅ 핵심: category 내려주기 (null-safe)
+            if (m.getCategory() != null) {
+                this.category = m.getCategory().name(); // "PAINTING"
+                this.categoryName = m.getCategory().getDisplayName(); // "도장"
+            } else {
+                this.category = null;
+                this.categoryName = null;
+            }
+
+            this.createdAt = m.getCreatedAt();
+            this.submittedAt = m.getSubmittedAt();
         }
-
-        this.createdAt = m.getCreatedAt();
-        this.submittedAt = m.getSubmittedAt();
     }
-}
-
 
     @Getter
     @AllArgsConstructor
@@ -90,8 +89,8 @@ public static class SimpleDTO {
         // 견적
         private BigDecimal estimateAmount;
         private String estimateComment;
-        private LocalDate workStartDate;
-        private LocalDate workEndDate;
+        private LocalDateTime workStartDate;
+        private LocalDateTime workEndDate;
         private List<EstimateAttemptDTO> estimateAttempts;
 
         private Integer estimateResubmitCount;
@@ -280,77 +279,77 @@ public static class SimpleDTO {
     }
 
     @Getter
-@Setter
-@AllArgsConstructor
-@NoArgsConstructor
-public static class EstimateAttemptDTO {
-
-    private int attemptNo;
-    private String estimateAmount;
-    private String estimateComment;
-    private LocalDate workStartDate;
-    private LocalDate workEndDate;
-    private LocalDateTime vendorSubmittedAt;
-
-    private String workerTeamLabel;
-    private String workerName;
-    private String workerPhone;
-
-    // ✅ 기존 유지: 화면 표시용 URL 리스트(안 깨짐)
-    private List<String> estimatePhotoUrls = List.of();
-
-    // ✅ 신규 추가: 수정/삭제/유지용 (fileKey 필요)
-    private List<EstimatePhotoDTO> estimatePhotos = List.of();
-
-    private String hqDecision;
-    private LocalDateTime hqDecidedAt;
-    private String hqDecidedByName;
-    private String hqRejectReason;
-
-    @Getter @Setter
+    @Setter
     @AllArgsConstructor
     @NoArgsConstructor
-    public static class EstimatePhotoDTO {
-        private String fileKey;
-        private String publicUrl; // ✅ viewUrl (presigned GET)
+    public static class EstimateAttemptDTO {
+
+        private int attemptNo;
+        private String estimateAmount;
+        private String estimateComment;
+        private LocalDateTime workStartDate;
+        private LocalDateTime workEndDate;
+        private LocalDateTime vendorSubmittedAt;
+
+        private String workerTeamLabel;
+        private String workerName;
+        private String workerPhone;
+
+        // ✅ 기존 유지: 화면 표시용 URL 리스트(안 깨짐)
+        private List<String> estimatePhotoUrls = List.of();
+
+        // ✅ 신규 추가: 수정/삭제/유지용 (fileKey 필요)
+        private List<EstimatePhotoDTO> estimatePhotos = List.of();
+
+        private String hqDecision;
+        private LocalDateTime hqDecidedAt;
+        private String hqDecidedByName;
+        private String hqRejectReason;
+
+        @Getter
+        @Setter
+        @AllArgsConstructor
+        @NoArgsConstructor
+        public static class EstimatePhotoDTO {
+            private String fileKey;
+            private String publicUrl; // ✅ viewUrl (presigned GET)
+        }
+
+        // ✅ 기존 유지
+        public static EstimateAttemptDTO from(MaintenanceEstimateAttempt a) {
+            return from(a, List.of(), List.of());
+        }
+
+        // ✅ 기존 시그니처 유지(다른 곳 안 깨짐): URL만 주입
+        public static EstimateAttemptDTO from(MaintenanceEstimateAttempt a, List<String> estimatePhotoUrls) {
+            return from(a, estimatePhotoUrls, List.of());
+        }
+
+        // ✅ 신규: URL + (fileKey, publicUrl) 둘 다 주입
+        public static EstimateAttemptDTO from(
+                MaintenanceEstimateAttempt a,
+                List<String> estimatePhotoUrls,
+                List<EstimatePhotoDTO> estimatePhotos) {
+            EstimateAttemptDTO dto = new EstimateAttemptDTO();
+            dto.setAttemptNo(a.getAttemptNo());
+            dto.setEstimateAmount(a.getEstimateAmount());
+            dto.setEstimateComment(a.getEstimateComment());
+            dto.setWorkStartDate(a.getWorkStartDate());
+            dto.setWorkEndDate(a.getWorkEndDate());
+            dto.setVendorSubmittedAt(a.getVendorSubmittedAt());
+            dto.setWorkerTeamLabel(a.getWorkerTeamLabel());
+            dto.setWorkerName(a.getWorkerName());
+            dto.setWorkerPhone(a.getWorkerPhone());
+
+            dto.setEstimatePhotoUrls(estimatePhotoUrls == null ? List.of() : estimatePhotoUrls);
+            dto.setEstimatePhotos(estimatePhotos == null ? List.of() : estimatePhotos);
+
+            dto.setHqDecision(a.getHqDecision() == null ? "PENDING" : a.getHqDecision().name());
+            dto.setHqDecidedAt(a.getHqDecidedAt());
+            dto.setHqDecidedByName(a.getHqDecidedByName());
+            dto.setHqRejectReason(a.getHqRejectReason());
+            return dto;
+        }
     }
-
-    // ✅ 기존 유지
-    public static EstimateAttemptDTO from(MaintenanceEstimateAttempt a) {
-        return from(a, List.of(), List.of());
-    }
-
-    // ✅ 기존 시그니처 유지(다른 곳 안 깨짐): URL만 주입
-    public static EstimateAttemptDTO from(MaintenanceEstimateAttempt a, List<String> estimatePhotoUrls) {
-        return from(a, estimatePhotoUrls, List.of());
-    }
-
-    // ✅ 신규: URL + (fileKey, publicUrl) 둘 다 주입
-    public static EstimateAttemptDTO from(
-            MaintenanceEstimateAttempt a,
-            List<String> estimatePhotoUrls,
-            List<EstimatePhotoDTO> estimatePhotos
-    ) {
-        EstimateAttemptDTO dto = new EstimateAttemptDTO();
-        dto.setAttemptNo(a.getAttemptNo());
-        dto.setEstimateAmount(a.getEstimateAmount());
-        dto.setEstimateComment(a.getEstimateComment());
-        dto.setWorkStartDate(a.getWorkStartDate());
-        dto.setWorkEndDate(a.getWorkEndDate());
-        dto.setVendorSubmittedAt(a.getVendorSubmittedAt());
-        dto.setWorkerTeamLabel(a.getWorkerTeamLabel());
-        dto.setWorkerName(a.getWorkerName());
-        dto.setWorkerPhone(a.getWorkerPhone());
-
-        dto.setEstimatePhotoUrls(estimatePhotoUrls == null ? List.of() : estimatePhotoUrls);
-        dto.setEstimatePhotos(estimatePhotos == null ? List.of() : estimatePhotos);
-
-        dto.setHqDecision(a.getHqDecision() == null ? "PENDING" : a.getHqDecision().name());
-        dto.setHqDecidedAt(a.getHqDecidedAt());
-        dto.setHqDecidedByName(a.getHqDecidedByName());
-        dto.setHqRejectReason(a.getHqRejectReason());
-        return dto;
-    }
-}
 
 }

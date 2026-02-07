@@ -1,6 +1,3 @@
-// ============================
-// JwtAuthorizationFilter.java
-// ============================
 package com.juvis.juvis._core.filter;
 
 import com.juvis.juvis._core.util.JwtUtil;
@@ -48,7 +45,7 @@ public class JwtAuthorizationFilter extends OncePerRequestFilter {
 
         String authHeader = request.getHeader(JwtUtil.HEADER);
 
-        // 토큰 없으면 통과 (인가 여부는 SecurityConfig가 결정)
+        // 토큰 없으면 통과 (SecurityConfig에서 URL별로 제어)
         if (authHeader == null || !authHeader.startsWith(JwtUtil.TOKEN_PREFIX)) {
             filterChain.doFilter(request, response);
             return;
@@ -77,7 +74,9 @@ public class JwtAuthorizationFilter extends OncePerRequestFilter {
             filterChain.doFilter(request, response);
 
         } catch (Exception e) {
-            // ✅ 여기서 body를 쓰지 말고 그냥 401만 주는게 깔끔
+            // (원인 추적 필요하면 잠깐 켜기)
+            // log.warn("JWT auth failed uri={} msg={}", request.getRequestURI(), e.getMessage());
+
             SecurityContextHolder.clearContext();
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
         }

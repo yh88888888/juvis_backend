@@ -90,10 +90,10 @@ public class Maintenance {
    private String estimateComment;
 
    @Column(name = "work_start_date")
-   private LocalDate workStartDate;
+   private LocalDateTime workStartDate;
 
    @Column(name = "work_end_date")
-   private LocalDate workEndDate;
+   private LocalDateTime workEndDate;
 
    @Column(name = "estimate_resubmit_count", nullable = false)
    private int estimateResubmitCount;
