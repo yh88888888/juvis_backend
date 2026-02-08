@@ -1,14 +1,17 @@
 package com.juvis.juvis.maintenance;
 
+import java.io.ByteArrayOutputStream;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
+import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.springframework.data.domain.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,19 +35,8 @@ import com.juvis.juvis.user.UserRepository;
 import com.juvis.juvis.vendor_worker.VendorWorker;
 import com.juvis.juvis.vendor_worker.VendorWorkerRepository;
 
-import java.io.ByteArrayOutputStream;
-import java.sql.Date;
-import java.sql.Timestamp;
-import java.time.format.DateTimeFormatter;
-
-import org.apache.poi.ss.usermodel.*;
-import org.apache.poi.ss.util.CellRangeAddress;
-import org.apache.poi.xssf.usermodel.XSSFWorkbook;
-import org.springframework.data.domain.Sort;
-import org.springframework.data.domain.PageRequest;
-
-import lombok.extern.slf4j.Slf4j;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Service
@@ -73,6 +65,25 @@ public class MaintenanceService {
     }
 
     // ========================= BRANCH =========================
+    private String normalizeTitle(String title, MaintenanceCategory category, String description) {
+        String t = (title == null) ? "" : title.trim();
+        if (!t.isEmpty())
+            return t;
+
+        String cat = (category == null) ? "유지보수" : category.getDisplayName();
+
+        String d = (description == null) ? "" : description.trim();
+        if (d.isEmpty())
+            return cat + " 요청";
+
+        String firstLine = d.split("\\R", 2)[0].trim();
+        if (firstLine.isEmpty())
+            return cat + " 요청";
+
+        if (firstLine.length() > 30)
+            firstLine = firstLine.substring(0, 30) + "…";
+        return cat + " - " + firstLine;
+    }
 
     @Transactional
     public Maintenance createByBranch(LoginUser loginUser, MaintenanceRequest.CreateDTO dto) {
@@ -88,6 +99,8 @@ public class MaintenanceService {
             throw new ExceptionApi400("지점 정보가 없습니다.");
         }
 
+        dto.setTitle(normalizeTitle(dto.getTitle(), dto.getCategory(), dto.getDescription()));
+
         Maintenance mr = dto.isSubmit()
                 ? Maintenance.createSubmitted(branch, currentUser, dto)
                 : Maintenance.createDraft(branch, currentUser, dto);
@@ -97,16 +110,21 @@ public class MaintenanceService {
         // ✅ 요청 첨부 사진은 maintenance_photo에 REQUEST로 저장
         List<MaintenanceRequest.PhotoDTO> photos = dto.getPhotos();
         if (photos != null && !photos.isEmpty()) {
+
             List<MaintenancePhoto> entities = photos.stream()
-                    .filter(p -> p.getFileKey() != null && p.getUrl() != null)
+                    // 🔒 안전 필터 (핵심)
+                    .filter(p -> p.getFileKey() != null && !p.getFileKey().isBlank())
+                    .filter(p -> p.getUrl() != null && !p.getUrl().isBlank())
                     .map(p -> MaintenancePhoto.of(
                             saved,
-                            p.getFileKey(),
-                            p.getUrl(),
+                            p.getFileKey().trim(),
+                            p.getUrl().trim(),
                             MaintenancePhoto.PhotoType.REQUEST))
-                    .collect(Collectors.toList());
+                    .toList();
 
-            maintenancePhotoRepository.saveAll(entities);
+            if (!entities.isEmpty()) {
+                maintenancePhotoRepository.saveAll(entities);
+            }
         }
 
         // LAZY 초기화
@@ -202,7 +220,6 @@ public class MaintenanceService {
     // ========================= 사진 분리 빌더 =========================
     private MaintenanceResponse.EstimateAttemptDTO findLatestAttemptDto(Long maintenanceId) {
 
-        // ✅ 최신 attempt 엔티티 1건 조회
         MaintenanceEstimateAttempt latest = attemptRepository
                 .findTopByMaintenance_IdOrderByAttemptNoDesc(maintenanceId)
                 .orElse(null);
@@ -210,8 +227,7 @@ public class MaintenanceService {
         if (latest == null)
             return null;
 
-        // ✅ 견적 사진 URL 매핑(이미 너 서비스에 있는 함수 재사용)
-        // 최신 attemptNo의 사진만 꺼내서 DTO에 넣어줌 (사실 지점은 attempts를 숨길 거라 필수는 아님)
+        // 최신 attemptNo의 사진만 DTO에 넣어줌
         Map<Integer, List<String>> photoUrlsByAttempt = buildEstimatePhotoUrlsByAttempt(latest.getMaintenance());
         List<String> urls = photoUrlsByAttempt.getOrDefault(latest.getAttemptNo(), List.of());
 
@@ -220,25 +236,31 @@ public class MaintenanceService {
 
     private List<String> buildRequestPhotoUrls(Maintenance m) {
         return maintenancePhotoRepository
-                .findByMaintenanceIdAndPhotoType(m.getId(), MaintenancePhoto.PhotoType.REQUEST)
+                .findByMaintenanceIdAndPhotoTypeOrderByIdAsc(
+                        m.getId(),
+                        MaintenancePhoto.PhotoType.REQUEST)
                 .stream()
                 .map(MaintenancePhoto::getFileKey)
-                .map(presignService::presignedGetUrl) // ✅ GET presign으로 viewUrl
-                .filter(u -> u != null && !u.isBlank())
+                .filter(Objects::nonNull)
+                .filter(s -> !s.isBlank())
+                .map(k -> presignService.presignedGetUrl(k)) // ✅ 여기 핵심
                 .toList();
     }
 
     private List<String> buildResultPhotoUrls(Maintenance m) {
         return maintenancePhotoRepository
-                .findByMaintenanceIdAndPhotoType(m.getId(), MaintenancePhoto.PhotoType.RESULT)
+                .findByMaintenanceIdAndPhotoTypeOrderByIdAsc(
+                        m.getId(),
+                        MaintenancePhoto.PhotoType.RESULT)
                 .stream()
                 .map(MaintenancePhoto::getFileKey)
-                .map(presignService::presignedGetUrl)
-                .filter(u -> u != null && !u.isBlank())
+                .filter(Objects::nonNull)
+                .filter(s -> !s.isBlank())
+                .map(k -> presignService.presignedGetUrl(k)) // ✅ 여기 핵심
                 .toList();
     }
 
-    // ✅ 추가: 견적 사진(ESTIMATE) attemptNo별로 URL을 그룹핑
+    // ✅ 견적 사진(ESTIMATE) attemptNo별 URL 그룹핑 (view URL)
     private Map<Integer, List<String>> buildEstimatePhotoUrlsByAttempt(Maintenance m) {
         return maintenancePhotoRepository
                 .findByMaintenanceIdAndPhotoTypeOrderByIdAsc(m.getId(), MaintenancePhoto.PhotoType.ESTIMATE)
@@ -251,6 +273,7 @@ public class MaintenanceService {
                                 Collectors.toList())));
     }
 
+    // ✅ 견적 사진(ESTIMATE) attemptNo별 DTO 그룹핑 (fileKey + viewUrl)
     private Map<Integer, List<MaintenanceResponse.EstimateAttemptDTO.EstimatePhotoDTO>> buildEstimatePhotosByAttempt(
             Maintenance m) {
 
@@ -267,16 +290,13 @@ public class MaintenanceService {
                                 Collectors.toList())));
     }
 
-    // ✅ 상세 DTO
+    // ✅ HQ/VENDOR 상세 DTO
     public MaintenanceResponse.DetailDTO toDetailDTO(Maintenance m) {
 
         List<String> requestPhotoUrls = buildRequestPhotoUrls(m);
         List<String> resultPhotoUrls = buildResultPhotoUrls(m);
 
-        // ✅ 기존 유지
         Map<Integer, List<String>> estimatePhotoUrlsByAttempt = buildEstimatePhotoUrlsByAttempt(m);
-
-        // ✅ 신규 추가
         Map<Integer, List<MaintenanceResponse.EstimateAttemptDTO.EstimatePhotoDTO>> estimatePhotosByAttempt = buildEstimatePhotosByAttempt(
                 m);
 
@@ -342,10 +362,10 @@ public class MaintenanceService {
         if (m.getStatus() != MaintenanceStatus.REQUESTED) {
             throw new ExceptionApi400("REQUESTED 상태에서만 1차 승인할 수 있습니다.");
         }
+
         // ✅ 고정 Vendor 자동 배정 (id=43)
         User vendor = userRepository.findById(43)
                 .orElseThrow(() -> new ExceptionApi404("고정 업체(VENDOR=43) 없음"));
-
         m.setVendor(vendor);
 
         User hqUser = loadUser(currentUser);
@@ -356,7 +376,7 @@ public class MaintenanceService {
         m.setRequestApprovedAt(LocalDateTime.now());
         m.setRequestRejectedReason(null);
 
-        // ✅ 여기 추가: 승인 코멘트 저장(선택)
+        // ✅ 승인 코멘트 저장(선택)
         String c = (dto == null || dto.getComment() == null) ? null : dto.getComment().trim();
         m.setRequestApprovedComment((c == null || c.isEmpty()) ? null : c);
 
@@ -385,30 +405,16 @@ public class MaintenanceService {
         current.approve(loginUser.username());
         attemptRepository.save(current);
 
-        // ✅ 승인자(HQ) 기록 (레거시 필드)
+        // ✅ 승인자(HQ) 기록
         User hqUser = userRepository.findById(loginUser.id())
                 .orElseThrow(() -> new ExceptionApi400("승인자 정보를 찾을 수 없습니다."));
 
         m.setEstimateApprovedBy(hqUser);
         m.setEstimateApprovedAt(LocalDateTime.now());
 
-        // ✅ [추천1] 작업예정일 확정 저장 (지점에서 attempts 숨겨도 일정 보이게)
-        // - null이면 그냥 null로 남음 (업체가 날짜를 안 넣은 케이스)
+        // ✅ 작업예정일 확정 저장
         m.setWorkStartDate(current.getWorkStartDate());
         m.setWorkEndDate(current.getWorkEndDate());
-
-        // (선택) 레거시 견적 필드도 유지/동기화하고 싶으면 같이 저장 가능
-        // - 지금은 지점에서 견적 금액/코멘트를 숨기므로 필수는 아님
-        // m.setEstimateComment(current.getEstimateComment());
-        // if (current.getEstimateAmount() != null) {
-        // try {
-        // m.setEstimateAmount(new BigDecimal(current.getEstimateAmount().replace(",",
-        // "").trim()));
-        // } catch (Exception ignore) {
-        // // 금액 포맷이 이상하면 레거시는 비워둠
-        // m.setEstimateAmount(null);
-        // }
-        // }
 
         // ✅ 진행 상태로 전환
         changeStatusWithNotify(m, MaintenanceStatus.IN_PROGRESS);
@@ -438,6 +444,7 @@ public class MaintenanceService {
         changeStatusWithNotify(m, MaintenanceStatus.HQ1_REJECTED);
         m.setRequestRejectedReason(dto.getReason().trim());
 
+        // (참고) 기존 코드 유지
         m.setRequestApprovedBy(hqUser);
         m.setRequestApprovedAt(LocalDateTime.now());
 
@@ -550,7 +557,7 @@ public class MaintenanceService {
             throw new ExceptionApi400("재제출은 1회만 허용됩니다.");
         }
 
-        // 6) 안전장치(중복 제출 방지)
+        // 6) 중복 제출 방지
         attemptRepository.findByMaintenance_IdAndAttemptNo(m.getId(), nextAttemptNo)
                 .ifPresent(a -> {
                     throw new ExceptionApi400("이미 제출된 견적입니다. attemptNo=" + nextAttemptNo);
@@ -563,11 +570,7 @@ public class MaintenanceService {
 
         LocalDateTime now = LocalDateTime.now();
 
-        // =========================
         // 7-1) ✅ 작업자 선택 검증 및 반영
-        // =========================
-        // (견적 제출 서비스 메서드 내부) - 해당 블록 교체
-
         VendorWorker worker = null;
 
         if (dto.getWorkerId() != null) {
@@ -577,11 +580,12 @@ public class MaintenanceService {
                             loginUser.id().longValue())
                     .orElseThrow(() -> new ExceptionApi400("유효하지 않은 작업자입니다."));
 
-            m.setVendorWorkerId(worker.getId()); // 유지하고 싶으면 OK
+            m.setVendorWorkerId(worker.getId());
         } else {
             m.setVendorWorkerId(null);
         }
 
+        // 8) attempt 생성/저장
         MaintenanceEstimateAttempt attempt = MaintenanceEstimateAttempt.create(
                 m,
                 nextAttemptNo,
@@ -595,23 +599,18 @@ public class MaintenanceService {
         attempt.setWorkerSnapshot(worker);
 
         attemptRepository.save(attempt);
-        // =========================
-        // 9) ✅ 견적 사진 메타 저장 (핵심)
-        // - 업로드는 이미 프론트에서 S3 PUT 완료
-        // - 여기서는 fileKey/publicUrl만 DB에 저장
-        // - attemptNo를 함께 저장해서 1차/2차 사진이 섞이지 않게 함
-        // =========================
+
+        // 9) ✅ 견적 사진 메타 저장 (ESTIMATE + attemptNo)
         if (dto.getEstimatePhotos() != null && !dto.getEstimatePhotos().isEmpty()) {
 
-            // (선택) 들어온 값 필터링
             List<MaintenanceRequest.SubmitEstimateDTO.EstimatePhotoDTO> valid = dto.getEstimatePhotos().stream()
-                    .filter(p -> p.getFileKey() != null && !p.getFileKey().trim().isEmpty())
-                    .filter(p -> p.getPublicUrl() != null && !p.getPublicUrl().trim().isEmpty())
+                    .filter(p -> p.getFileKey() != null && !p.getFileKey().isBlank())
+                    .filter(p -> p.getPublicUrl() != null && !p.getPublicUrl().isBlank())
                     .toList();
 
             if (!valid.isEmpty()) {
 
-                // ✅ 꼬임 방지 포인트:
+                // ✅ 꼬임 방지
                 maintenancePhotoRepository.deleteByMaintenanceIdAndPhotoTypeAndAttemptNo(
                         m.getId(),
                         MaintenancePhoto.PhotoType.ESTIMATE,
@@ -638,8 +637,6 @@ public class MaintenanceService {
         changeStatusWithNotify(m, MaintenanceStatus.APPROVAL_PENDING);
         m.setVendorSubmittedAt(now);
         m.setEstimateRejectedReason(null);
-
-        // ✅ m은 영속 상태라 save() 없어도 커밋 시점에 반영됨
     }
 
     @Transactional
@@ -673,7 +670,6 @@ public class MaintenanceService {
             throw new ExceptionApi400("HQ 결정 이후에는 수정할 수 없습니다. decision=" + latest.getHqDecision());
         }
 
-        // 필수값 검증
         if (dto.getEstimateAmount() == null) {
             throw new ExceptionApi400("estimateAmount는 필수입니다.");
         }
@@ -689,16 +685,14 @@ public class MaintenanceService {
             m.setVendorWorkerId(null);
         }
 
-        // ✅ attempt 업데이트
         latest.setWorkerSnapshot(worker);
 
-        // amount/comment/date 갱신 (setter가 없다면 entity에 setter 추가하거나 @Setter 일부 허용)
         latest.updateEstimate(
                 dto.getEstimateAmount().toString().trim(),
                 dto.getEstimateComment(),
                 dto.getWorkStartDate(),
                 dto.getWorkEndDate(),
-                worker, // VendorWorker (없으면 null)
+                worker,
                 LocalDateTime.now());
 
         attemptRepository.save(latest);
@@ -713,8 +707,8 @@ public class MaintenanceService {
 
         if (dto.getEstimatePhotos() != null && !dto.getEstimatePhotos().isEmpty()) {
             List<MaintenanceRequest.SubmitEstimateDTO.EstimatePhotoDTO> valid = dto.getEstimatePhotos().stream()
-                    .filter(p -> p.getFileKey() != null && !p.getFileKey().trim().isEmpty())
-                    .filter(p -> p.getPublicUrl() != null && !p.getPublicUrl().trim().isEmpty())
+                    .filter(p -> p.getFileKey() != null && !p.getFileKey().isBlank())
+                    .filter(p -> p.getPublicUrl() != null && !p.getPublicUrl().isBlank())
                     .toList();
 
             List<MaintenancePhoto> photos = valid.stream()
@@ -725,15 +719,14 @@ public class MaintenanceService {
                             attemptNo))
                     .toList();
 
-            maintenancePhotoRepository.saveAll(photos);
+            if (!photos.isEmpty()) {
+                maintenancePhotoRepository.saveAll(photos);
+            }
         }
 
-        // ✅ maintenance의 vendorSubmittedAt도 갱신(선택이지만 UX상 깔끔)
         m.setVendorSubmittedAt(LocalDateTime.now());
-        // =========================================================
-        // ✅ [추가] 견적 수정 알림 발생 (상태 변화가 없으므로 별도 이벤트)
-        // - NotificationService에 notifyOnEstimateUpdated(Maintenance m)만 구현해주면 됨
-        // =========================================================
+
+        // ✅ 상태 변화 없음: 별도 알림
         notificationService.notifyEstimateUpdated(m);
     }
 
@@ -751,12 +744,10 @@ public class MaintenanceService {
             throw new ExceptionApi403("본인에게 배정된 요청만 수정 가능합니다.");
         }
 
-        // ✅ 승인/반려 전(결정 전)만 수정 가능하게: status=APPROVAL_PENDING
         if (m.getStatus() != MaintenanceStatus.APPROVAL_PENDING) {
             throw new ExceptionApi400("수정 불가 상태입니다. status=" + m.getStatus());
         }
 
-        // ✅ 최신 attempt
         List<MaintenanceEstimateAttempt> attempts = attemptRepository
                 .findByMaintenance_IdOrderByAttemptNoAsc(m.getId());
 
@@ -766,17 +757,14 @@ public class MaintenanceService {
 
         MaintenanceEstimateAttempt current = attempts.get(attempts.size() - 1);
 
-        // ✅ HQ가 이미 결정을 내렸으면 수정 금지
         if (current.getHqDecision() != MaintenanceEstimateAttempt.HqDecision.PENDING) {
             throw new ExceptionApi400("HQ 결정 이후에는 수정할 수 없습니다.");
         }
 
-        // ✅ 필수 검증
         if (dto == null || dto.getEstimateAmount() == null || dto.getEstimateAmount().trim().isEmpty()) {
             throw new ExceptionApi400("estimateAmount는 필수입니다.");
         }
 
-        // 0) 작업자 검증/조회
         VendorWorker worker = null;
         if (dto.getWorkerId() != null) {
             worker = vendorWorkerRepository
@@ -786,7 +774,6 @@ public class MaintenanceService {
 
         LocalDateTime now = LocalDateTime.now();
 
-        // 1) ✅ attempt 본문 수정 (⚠️ builder/save로 새 엔티티 만들지 말 것)
         current.updateEstimate(
                 dto.getEstimateAmount().trim(),
                 dto.getEstimateComment(),
@@ -795,10 +782,6 @@ public class MaintenanceService {
                 worker,
                 now);
 
-        // (선택) 영속 상태면 save() 없어도 dirty checking으로 반영됨
-        // attemptRepository.save(current);
-
-        // 2) ✅ 사진은 “photoChanged=true”일 때만 교체
         boolean photoChanged = Boolean.TRUE.equals(dto.getPhotoChanged());
         if (photoChanged) {
             List<MaintenanceRequest.SubmitEstimateDTO.EstimatePhotoDTO> incoming = (dto.getEstimatePhotos() == null)
@@ -806,11 +789,10 @@ public class MaintenanceService {
                     : dto.getEstimatePhotos();
 
             List<MaintenanceRequest.SubmitEstimateDTO.EstimatePhotoDTO> valid = incoming.stream()
-                    .filter(p -> p.getFileKey() != null && !p.getFileKey().trim().isEmpty())
-                    .filter(p -> p.getPublicUrl() != null && !p.getPublicUrl().trim().isEmpty())
+                    .filter(p -> p.getFileKey() != null && !p.getFileKey().isBlank())
+                    .filter(p -> p.getPublicUrl() != null && !p.getPublicUrl().isBlank())
                     .toList();
 
-            // ✅ 전체 교체(삭제+삽입)
             maintenancePhotoRepository.deleteByMaintenanceIdAndPhotoTypeAndAttemptNo(
                     m.getId(),
                     MaintenancePhoto.PhotoType.ESTIMATE,
@@ -829,16 +811,10 @@ public class MaintenanceService {
             }
         }
 
-        // 3) ✅ 상태는 여전히 APPROVAL_PENDING 유지 + 레거시 필드 업데이트(원하면)
         m.setVendorSubmittedAt(now);
         m.setEstimateRejectedReason(null);
-        // =========================================================
-        // ✅ [추가] 견적 수정 알림 발생 (상태 변화가 없으므로 별도 이벤트)
-        // =========================================================
-        notificationService.notifyEstimateUpdated(m);
 
-        // (선택) 작업자 ID를 maintenance에도 저장해두는 정책이면 같이 갱신
-        // m.setVendorWorkerId(worker == null ? null : worker.getId());
+        notificationService.notifyEstimateUpdated(m);
     }
 
     @Transactional
@@ -849,7 +825,6 @@ public class MaintenanceService {
 
         Maintenance m = completeWork(currentUser, id, dto);
 
-        // ✅ detached 방지: 여기서 다시 find로 당겨오면 더 안전
         Maintenance fresh = maintenanceRepository.findById(m.getId())
                 .orElseThrow(() -> new ExceptionApi404("요청을 찾을 수 없습니다."));
 
@@ -883,16 +858,35 @@ public class MaintenanceService {
 
         m.setWorkCompletedAt(completedAt);
         changeStatusWithNotify(m, MaintenanceStatus.COMPLETED);
-        maintenanceRepository.save(m);
+        // ✅ 최종 견적가(finalAmount) 저장
+        if (dto.getFinalAmount() != null) {
 
+            MaintenanceEstimateAttempt latestApprovedAttempt = attemptRepository
+                    .findTopByMaintenance_IdAndHqDecisionOrderByAttemptNoDesc(
+                            m.getId(),
+                            MaintenanceEstimateAttempt.HqDecision.APPROVED)
+                    .orElseThrow(() -> new ExceptionApi400("승인된 견적이 없어 최종 견적을 저장할 수 없습니다."));
+
+            latestApprovedAttempt.setFinalAmount(dto.getFinalAmount());
+
+            attemptRepository.save(latestApprovedAttempt);
+        }
+
+        // ✅ RESULT 사진 저장
         if (dto.getResultPhotos() != null && !dto.getResultPhotos().isEmpty()) {
             List<MaintenancePhoto> photos = dto.getResultPhotos().stream()
-                    .filter(p -> p.getFileKey() != null && p.getPublicUrl() != null)
-                    .map(p -> MaintenancePhoto.of(m, p.getFileKey(), p.getPublicUrl(),
+                    .filter(p -> p.getFileKey() != null && !p.getFileKey().isBlank())
+                    .filter(p -> p.getPublicUrl() != null && !p.getPublicUrl().isBlank())
+                    .map(p -> MaintenancePhoto.of(
+                            m,
+                            p.getFileKey().trim(),
+                            p.getPublicUrl().trim(),
                             MaintenancePhoto.PhotoType.RESULT))
                     .toList();
 
-            maintenancePhotoRepository.saveAll(photos);
+            if (!photos.isEmpty()) {
+                maintenancePhotoRepository.saveAll(photos);
+            }
         }
 
         return m;
@@ -920,16 +914,16 @@ public class MaintenanceService {
         User hqUser = loadUser(loginUser);
 
         Branch branch = branchRepository.findById(dto.getBranchId())
-                .orElseThrow(() -> new ExceptionApi404(
-                        "지점을 찾을 수 없습니다. id=" + dto.getBranchId()));
+                .orElseThrow(() -> new ExceptionApi404("지점을 찾을 수 없습니다. id=" + dto.getBranchId()));
 
-        // ✅ DRAFT로 생성 (저장 버튼)
+        String fixedTitle = normalizeTitle(dto.getTitle(), dto.getCategory(), dto.getDescription());
+
         Maintenance m = Maintenance.createDraft(
                 branch,
-                hqUser, // requester = HQ
+                hqUser,
                 new MaintenanceRequest.CreateDTO() {
                     {
-                        setTitle(dto.getTitle());
+                        setTitle(fixedTitle);
                         setDescription(dto.getDescription());
                         setCategory(dto.getCategory());
                         setSubmit(false);
@@ -939,21 +933,24 @@ public class MaintenanceService {
 
         Maintenance saved = maintenanceRepository.save(m);
 
-        // ✅ 요청 사진 저장 (기존 로직 그대로)
+        // ✅ 요청 사진 저장 (REQUEST)
         if (dto.getPhotos() != null && !dto.getPhotos().isEmpty()) {
             List<MaintenancePhoto> photos = dto.getPhotos().stream()
-                    .filter(p -> p.getFileKey() != null && p.getUrl() != null)
+                    .filter(p -> p.getFileKey() != null && !p.getFileKey().isBlank())
+                    .filter(p -> p.getUrl() != null && !p.getUrl().isBlank())
                     .map(p -> MaintenancePhoto.of(
                             saved,
-                            p.getFileKey(),
-                            p.getUrl(),
+                            p.getFileKey().trim(),
+                            p.getUrl().trim(),
                             MaintenancePhoto.PhotoType.REQUEST))
                     .toList();
 
-            maintenancePhotoRepository.saveAll(photos);
+            if (!photos.isEmpty()) {
+                maintenancePhotoRepository.saveAll(photos);
+            }
         }
 
-        saved.getBranch().getBranchName(); // lazy 방지
+        saved.getBranch().getBranchName();
         return saved;
     }
 
@@ -965,23 +962,18 @@ public class MaintenanceService {
 
         Maintenance m = findByIdOrThrow(id);
 
-        // ✅ HQ + DRAFT면 제출 가능 (requester_id 무관)
         if (m.getStatus() != MaintenanceStatus.DRAFT) {
             throw new ExceptionApi400("제출할 수 없는 상태입니다. status=" + m.getStatus());
         }
 
-        // ✅ vendor 자동배정
         User vendor = userRepository.findById(43)
                 .orElseThrow(() -> new ExceptionApi404("고정 업체(VENDOR=43) 없음"));
         m.setVendor(vendor);
 
-        // ✅ 제출 시점 기록
         m.setSubmittedAt(LocalDateTime.now());
 
-        // ✅ 곧바로 견적 단계로
         changeStatusWithNotify(m, MaintenanceStatus.ESTIMATING);
 
-        // ✅ HQ 승인 정보
         User hqUser = loadUser(loginUser);
         m.setRequestApprovedBy(hqUser);
         m.setRequestApprovedAt(LocalDateTime.now());
@@ -993,7 +985,7 @@ public class MaintenanceService {
             MaintenanceStatus status,
             MaintenanceCategory category,
             Long branchId,
-            String yearMonth, // "YYYY-MM"
+            String yearMonth,
             Pageable pageable) {
 
         if (loginUser == null ||
@@ -1005,8 +997,7 @@ public class MaintenanceService {
         LocalDateTime to = null;
 
         if (yearMonth != null && !yearMonth.isBlank()) {
-            // "2026-01" 형태
-            var ym = java.time.YearMonth.parse(yearMonth.trim());
+            YearMonth ym = YearMonth.parse(yearMonth.trim());
             from = ym.atDay(1).atStartOfDay();
             to = ym.plusMonths(1).atDay(1).atStartOfDay();
         }
@@ -1025,8 +1016,6 @@ public class MaintenanceService {
         Maintenance m = maintenanceRepository.findDetailById(id)
                 .orElseThrow(() -> new ExceptionApi404("해당 요청이 없습니다."));
 
-        // ✅ HQ/VENDOR는 기존 toDetailDTO 그대로 사용
-        // (지점만 숨김 정책은 forBranch에서만 적용 중)
         return toDetailDTO(m);
     }
 
@@ -1037,6 +1026,7 @@ public class MaintenanceService {
             MaintenanceCategory category,
             Long branchId,
             String yearMonth) {
+
         if (loginUser == null ||
                 !(loginUser.role() == UserRole.HQ || loginUser.role() == UserRole.VENDOR)) {
             throw new ExceptionApi403("HQ 또는 VENDOR 권한이 필요합니다.");
@@ -1067,9 +1057,8 @@ public class MaintenanceService {
             headerStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
             headerStyle.setBorderBottom(BorderStyle.THIN);
 
-            // ================= 헤더 (ID, 요청자 제거) =================
+            // ================= 헤더 =================
             String[] headers = {
-
                     "고유번호",
                     "지점",
                     "제목",
@@ -1092,42 +1081,37 @@ public class MaintenanceService {
 
             // ================= 데이터 =================
             int rowIdx = 1;
-            int seq = 1;
 
             for (Maintenance m : rows) {
                 Row row = sheet.createRow(rowIdx++);
                 int c = 0;
 
-                row.createCell(c++).setCellValue(m.getId()); // ✅ DB ID (노출)
-
-                row.createCell(c++).setCellValue(
-                        m.getBranch() == null ? "" : safe(m.getBranch().getBranchName()));
+                row.createCell(c++).setCellValue(m.getId());
+                row.createCell(c++).setCellValue(m.getBranch() == null ? "" : safe(m.getBranch().getBranchName()));
                 row.createCell(c++).setCellValue(safe(m.getTitle()));
+                row.createCell(c++).setCellValue(m.getCategory() == null ? "" : m.getCategory().getDisplayName());
+                row.createCell(c++).setCellValue(m.getStatus() == null ? "" : m.getStatus().kr());
+                row.createCell(c++)
+                        .setCellValue(m.getCreatedAt() == null ? "" : m.getCreatedAt().toLocalDate().format(df));
+                row.createCell(c++)
+                        .setCellValue(m.getSubmittedAt() == null ? "" : m.getSubmittedAt().toLocalDate().format(df));
                 row.createCell(c++).setCellValue(
-                        m.getCategory() == null ? "" : m.getCategory().getDisplayName());
-                row.createCell(c++).setCellValue(
-                        m.getStatus() == null ? "" : m.getStatus().kr());
-                row.createCell(c++).setCellValue(
-                        m.getCreatedAt() == null ? "" : m.getCreatedAt().toLocalDate().format(df));
-                row.createCell(c++).setCellValue(
-                        m.getSubmittedAt() == null ? "" : m.getSubmittedAt().toLocalDate().format(df));
-                row.createCell(c++).setCellValue(
-                        m.getWorkStartDate() == null ? "" : m.getWorkStartDate().format(df));
-                row.createCell(c++).setCellValue(
-                        m.getWorkEndDate() == null ? "" : m.getWorkEndDate().format(df));
+                        m.getWorkStartDate() == null ? "" : m.getWorkStartDate().toLocalDate().format(df));
+                row.createCell(c++)
+                        .setCellValue(m.getWorkEndDate() == null ? "" : m.getWorkEndDate().toLocalDate().format(df));
             }
 
-            // ================= 컬럼 너비 고정 =================
+            // ================= 컬럼 너비 =================
             int[] widths = {
                     18,
-                    18, // 지점
-                    30, // 제목
-                    16, // 카테고리
-                    16, // 상태
-                    14, // 생성일
-                    14, // 제출일
-                    14, // 작업시작일
-                    14 // 작업종료일
+                    18,
+                    30,
+                    16,
+                    16,
+                    14,
+                    14,
+                    14,
+                    14
             };
             for (int i = 0; i < widths.length; i++) {
                 sheet.setColumnWidth(i, widths[i] * 256);
@@ -1142,9 +1126,7 @@ public class MaintenanceService {
         }
     }
 
-    // ✅ null-safe string helper (이미 있으면 삭제하고 기존 거 써도 됨)
     private String safe(String s) {
         return s == null ? "" : s;
     }
-
 }

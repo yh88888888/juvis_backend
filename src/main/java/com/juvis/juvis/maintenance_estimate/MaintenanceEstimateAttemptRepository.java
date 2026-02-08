@@ -11,4 +11,8 @@ public interface MaintenanceEstimateAttemptRepository extends JpaRepository<Main
     Optional<MaintenanceEstimateAttempt> findByMaintenance_IdAndAttemptNo(Long maintenanceId, int attemptNo);
 
     Optional<MaintenanceEstimateAttempt> findTopByMaintenance_IdOrderByAttemptNoDesc(Long maintenanceId);
+
+    Optional<MaintenanceEstimateAttempt> findTopByMaintenance_IdAndHqDecisionOrderByAttemptNoDesc(
+            Long maintenanceId,
+            MaintenanceEstimateAttempt.HqDecision hqDecision);
 }

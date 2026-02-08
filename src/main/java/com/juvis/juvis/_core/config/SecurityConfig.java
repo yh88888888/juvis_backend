@@ -6,6 +6,7 @@ import com.juvis.juvis._core.filter.JwtAuthorizationFilter;
 
 import java.util.List;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -27,6 +28,9 @@ public class SecurityConfig {
     public BCryptPasswordEncoder encodePwd() {
         return new BCryptPasswordEncoder();
     }
+
+    @Value("${spring.profiles.active:dev}")
+    private String profile;
 
     @Bean
     public AuthenticationManager authenticationManager(AuthenticationConfiguration authenticationConfiguration)
@@ -77,9 +81,15 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
 
-        config.setAllowedOrigins(List.of(
-                "https://아이디진정성.com",
-                "https://www.아이디진정성.com"));
+        if ("prod".equals(profile)) {
+            config.setAllowedOriginPatterns(List.of(
+                    "https://아이디진정성.com",
+                    "https://www.아이디진정성.com"));
+        } else {
+            config.setAllowedOriginPatterns(List.of(
+                    "http://localhost:*",
+                    "http://127.0.0.1:*"));
+        }
 
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));

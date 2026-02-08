@@ -65,17 +65,25 @@ public class NotificationService {
         // Branch(요청자): ESTIMATING->APPROVAL_PENDING, APPROVAL_PENDING->IN_PROGRESS(✅
         // 추가)
         if (m.getBranch() != null) {
-            boolean branchShouldNotify = (before == MaintenanceStatus.ESTIMATING
-                    && after == MaintenanceStatus.APPROVAL_PENDING)
+            boolean branchShouldNotify = (before == MaintenanceStatus.REQUESTED
+                    && after == MaintenanceStatus.ESTIMATING) // ✅ 추가
+                    || (before == MaintenanceStatus.ESTIMATING
+                            && after == MaintenanceStatus.APPROVAL_PENDING)
                     || (before == MaintenanceStatus.APPROVAL_PENDING && after == MaintenanceStatus.IN_PROGRESS);
 
             if (branchShouldNotify) {
-                targets.addAll(
-                        userRepository.findAllByBranchIdAndRole(m.getBranch().getId(), UserRole.BRANCH));
-                ;
-                // 필요하면 요청자도 같이 (요청자가 BRANCH인 경우만)
-                // if (m.getRequester() != null && m.getRequester().getRole() ==
-                // UserRole.BRANCH) targets.add(m.getRequester());
+
+                // 1️⃣ 요청자가 BRANCH면 요청자에게
+                if (m.getRequester() != null && m.getRequester().getRole() == UserRole.BRANCH) {
+                    targets.add(m.getRequester());
+
+                    // 2️⃣ 요청자가 HQ 등 다른 역할이면 → 해당 지점의 BRANCH 1명에게
+                } else if (m.getBranch() != null) {
+                    targets.addAll(
+                            userRepository.findAllByBranchIdAndRole(
+                                    m.getBranch().getId(),
+                                    UserRole.BRANCH));
+                }
             }
         }
 
@@ -119,7 +127,7 @@ public class NotificationService {
         // ✅ 매 수정마다 중복키가 달라지게(초 단위)
         // (Notification 엔티티 unique key가 user_id, maintenance_id, event_type, attempt_no
         // 이므로)
-        int dedupeKey = (int)(System.currentTimeMillis() % Integer.MAX_VALUE);
+        int dedupeKey = (int) (System.currentTimeMillis() % Integer.MAX_VALUE);
 
         for (User u : targets) {
             try {

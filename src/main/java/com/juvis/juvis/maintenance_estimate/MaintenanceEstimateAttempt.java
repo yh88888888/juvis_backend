@@ -6,6 +6,7 @@ import com.juvis.juvis.vendor_worker.VendorWorker;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
@@ -41,7 +42,10 @@ public class MaintenanceEstimateAttempt {
     @Column(name = "estimate_comment", columnDefinition = "TEXT")
     private String estimateComment;
 
+    @Column(name = "work_start_date")
     private LocalDateTime workStartDate;
+
+    @Column(name = "work_end_date")
     private LocalDateTime workEndDate;
 
     @Column(name = "vendor_submitted_at", nullable = false)
@@ -74,6 +78,13 @@ public class MaintenanceEstimateAttempt {
 
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
+
+    @Column(name = "final_amount", precision = 15, scale = 0)
+    private BigDecimal finalAmount;
+
+    public void setFinalAmount(BigDecimal finalAmount) {
+        this.finalAmount = finalAmount;
+    }
 
     public void setWorkerSnapshot(VendorWorker w) {
         if (w == null) {

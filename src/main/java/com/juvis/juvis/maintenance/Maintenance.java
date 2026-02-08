@@ -173,7 +173,7 @@ public class Maintenance {
       return Maintenance.builder()
             .branch(branch)
             .requester(requester)
-            .title(dto.getTitle())
+            .title(dto.getTitle() == null || dto.getTitle().trim().isEmpty() ? "유지보수 요청" : dto.getTitle().trim())
             .description(dto.getDescription())
             .category(dto.getCategory())
             .status(MaintenanceStatus.DRAFT)

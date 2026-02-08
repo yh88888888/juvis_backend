@@ -9,6 +9,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import com.juvis.juvis._core.enums.MaintenanceCategory;
 
 public class MaintenanceRequest {
@@ -27,6 +28,7 @@ public class MaintenanceRequest {
     @Data
     public static class PhotoDTO {
         private String fileKey;
+        @JsonAlias({ "publicUrl" })
         private String url;
     }
 
@@ -52,6 +54,7 @@ public class MaintenanceRequest {
     @Setter
     public static class SubmitEstimateDTO {
         private BigDecimal estimateAmount;
+        private BigDecimal finalAmount;
         private String estimateComment;
         private LocalDateTime workStartDate;
         private LocalDateTime workEndDate;
@@ -72,8 +75,9 @@ public class MaintenanceRequest {
     @Setter
     public static class CompleteWorkDTO {
         private String resultComment; // 필수
-         private LocalDateTime completedAt; // 선택 (원하면 안 써도 됨)
-        private List<ResultPhotoDTO> resultPhotos; // ✅ 핵심
+        private LocalDateTime completedAt; // 선택 (원하면 안 써도 됨)
+        private List<ResultPhotoDTO> resultPhotos; 
+        private BigDecimal finalAmount;
 
         @Getter
         @Setter

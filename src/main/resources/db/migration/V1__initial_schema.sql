@@ -231,12 +231,13 @@ CREATE TABLE maintenance_estimate_attempt (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
 
   maintenance_id BIGINT UNSIGNED NOT NULL,
-  attempt_no INT NOT NULL, -- 1 or 2
+  attempt_no INT NOT NULL COMMENT '1 or 2',
 
-  estimate_amount VARCHAR(50) NOT NULL,
+  estimate_amount VARCHAR(50) NOT NULL COMMENT '업체 제출 견적(문자열)',
+  final_amount DECIMAL(15,0) NULL COMMENT '최종 확정 견적가',
+
   estimate_comment TEXT NULL,
 
-  -- ✅ 엔티티(LocalDateTime) 기준으로 DATETIME(6)
   work_start_date DATETIME(6) NULL,
   work_end_date   DATETIME(6) NULL,
 
