@@ -10,7 +10,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
+import java.text.DecimalFormat;
 
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
@@ -1007,23 +1007,48 @@ public class MaintenanceService {
             MaintenanceCategory category,
             Long branchId,
             String yearMonth,
+            String completedYearMonth, // ✅ 추가
+            String sortField, // ✅ 추가
             Pageable pageable) {
-
         if (loginUser == null ||
                 !(loginUser.role() == UserRole.HQ || loginUser.role() == UserRole.VENDOR)) {
             throw new ExceptionApi403("HQ 또는 VENDOR 권한이 필요합니다.");
         }
 
-        LocalDateTime from = null;
-        LocalDateTime to = null;
+        LocalDateTime createdFrom = null;
+        LocalDateTime createdTo = null;
 
         if (yearMonth != null && !yearMonth.isBlank()) {
             YearMonth ym = YearMonth.parse(yearMonth.trim());
-            from = ym.atDay(1).atStartOfDay();
-            to = ym.plusMonths(1).atDay(1).atStartOfDay();
+            createdFrom = ym.atDay(1).atStartOfDay();
+            createdTo = ym.plusMonths(1).atDay(1).atStartOfDay();
         }
 
-        return maintenanceRepository.searchForOps(status, category, branchId, from, to, pageable);
+        // ✅ 완료월 범위
+        LocalDateTime completedFrom = null;
+        LocalDateTime completedTo = null;
+
+        if (completedYearMonth != null && !completedYearMonth.isBlank()) {
+            YearMonth ym = YearMonth.parse(completedYearMonth.trim());
+            completedFrom = ym.atDay(1).atStartOfDay();
+            completedTo = ym.plusMonths(1).atDay(1).atStartOfDay();
+        }
+
+        // ✅ 정렬 강제: createdAt | workCompletedAt
+        Sort sort;
+        if ("completedAt".equalsIgnoreCase(sortField) || "workCompletedAt".equalsIgnoreCase(sortField)) {
+            sort = Sort.by(Sort.Direction.DESC, "workCompletedAt").and(Sort.by(Sort.Direction.DESC, "createdAt"));
+        } else {
+            sort = Sort.by(Sort.Direction.DESC, "createdAt");
+        }
+
+        Pageable fixed = PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), sort);
+
+        return maintenanceRepository.searchForOps(
+                status, category, branchId,
+                createdFrom, createdTo,
+                completedFrom, completedTo,
+                fixed);
     }
 
     @Transactional(readOnly = true)
@@ -1087,7 +1112,16 @@ public class MaintenanceService {
         }
 
         var pageable = PageRequest.of(0, 20000, Sort.by(Sort.Direction.DESC, "createdAt"));
-        var page = maintenanceRepository.searchForOps(status, category, branchId, from, to, pageable);
+        var page = maintenanceRepository.searchForOps(
+                status,
+                category,
+                branchId,
+                from,
+                to,
+                null, // completedFrom
+                null, // completedTo
+                pageable);
+
         var rows = page.getContent();
 
         // ✅ (중요) APPROVED attempt를 한 번에 가져와서 Map으로 만든다 (N+1 방지)
@@ -1100,10 +1134,13 @@ public class MaintenanceService {
                         a -> a.getMaintenance().getId(),
                         a -> a));
 
+        // ✅ exportOpsExcel() 안에서 try (Workbook wb = new XSSFWorkbook()) { ... } 내부에 그대로
+        // 붙여서 사용
+
         try (Workbook wb = new XSSFWorkbook()) {
             Sheet sheet = wb.createSheet("requests");
 
-            // ================= 헤더 스타일 =================
+            // ================= 스타일들 =================
             Font headerFont = wb.createFont();
             headerFont.setBold(true);
 
@@ -1112,6 +1149,20 @@ public class MaintenanceService {
             headerStyle.setFillForegroundColor(IndexedColors.GREY_25_PERCENT.getIndex());
             headerStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
             headerStyle.setBorderBottom(BorderStyle.THIN);
+            headerStyle.setAlignment(HorizontalAlignment.CENTER); // ✅ 헤더 가로 가운데
+            headerStyle.setVerticalAlignment(VerticalAlignment.CENTER); // ✅ 헤더 세로 가운데
+
+            // ✅ 본문(텍스트) 가운데 정렬
+            CellStyle bodyCenter = wb.createCellStyle();
+            bodyCenter.setAlignment(HorizontalAlignment.CENTER); // ✅ 가로 가운데
+            bodyCenter.setVerticalAlignment(VerticalAlignment.CENTER); // ✅ 세로 가운데
+            bodyCenter.setWrapText(true); // ✅ 줄바꿈(길면)
+
+            // ✅ 본문(좌측 정렬) - 내용/작업내용 같은 긴 텍스트용
+            CellStyle bodyLeft = wb.createCellStyle();
+            bodyLeft.setAlignment(HorizontalAlignment.LEFT);
+            bodyLeft.setVerticalAlignment(VerticalAlignment.CENTER);
+            bodyLeft.setWrapText(true);
 
             // ================= 헤더 =================
             String[] headers = {
@@ -1120,10 +1171,10 @@ public class MaintenanceService {
                     "분야",
                     "내용",
                     "상태",
-                    "요청일",
+                    "요청일시",
                     "(견적)시작일",
                     "(견적)종료일",
-                    "완료일",
+                    "완료일시",
                     "소요기간",
                     "견적가",
                     "최종견적가",
@@ -1131,6 +1182,7 @@ public class MaintenanceService {
             };
 
             Row headerRow = sheet.createRow(0);
+            headerRow.setHeightInPoints(22); // ✅ 헤더 높이(세로 가운데 체감)
             for (int i = 0; i < headers.length; i++) {
                 Cell cell = headerRow.createCell(i);
                 cell.setCellValue(headers[i]);
@@ -1138,72 +1190,114 @@ public class MaintenanceService {
             }
 
             DateTimeFormatter df = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+            DateTimeFormatter dtf = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+            DecimalFormat moneyFmt = new DecimalFormat("#,###");
+
+            // ✅ 셀 생성 헬퍼(정렬 적용)
+            java.util.function.BiFunction<Row, Integer, Cell> ccell = (r, idx) -> {
+                Cell cell = r.createCell(idx);
+                cell.setCellStyle(bodyCenter);
+                return cell;
+            };
+            java.util.function.BiFunction<Row, Integer, Cell> lcell = (r, idx) -> {
+                Cell cell = r.createCell(idx);
+                cell.setCellStyle(bodyLeft);
+                return cell;
+            };
 
             // ================= 데이터 =================
             int rowIdx = 1;
 
             for (Maintenance m : rows) {
                 Row row = sheet.createRow(rowIdx++);
+                row.setHeightInPoints(20); // ✅ 본문 높이(세로 가운데 체감)
+
                 int c = 0;
 
-                row.createCell(c++).setCellValue(safe(m.getRequestNo())); // ✅ m.getId() 대신
-                row.createCell(c++).setCellValue(m.getBranch() == null ? "" : safe(m.getBranch().getBranchName()));
-                row.createCell(c++).setCellValue(m.getCategory() == null ? "" : m.getCategory().getDisplayName());
-                row.createCell(c++).setCellValue(safe(titleOnly(m)));
-                row.createCell(c++).setCellValue(m.getStatus() == null ? "" : m.getStatus().kr());
-                row.createCell(c++)
-                        .setCellValue(m.getSubmittedAt() == null ? "" : m.getSubmittedAt().toLocalDate().format(df));
-                row.createCell(c++).setCellValue(
-                        m.getWorkStartDate() == null ? "" : m.getWorkStartDate().toLocalDate().format(df));
-                row.createCell(c++)
-                        .setCellValue(m.getWorkEndDate() == null ? "" : m.getWorkEndDate().toLocalDate().format(df));
-                row.createCell(c++).setCellValue(
-                        m.getWorkCompletedAt() == null ? "" : m.getWorkCompletedAt().toLocalDate().format(df));
+                ccell.apply(row, c++).setCellValue(safe(m.getRequestNo()));
+                ccell.apply(row, c++).setCellValue(m.getBranch() == null ? "" : safe(m.getBranch().getBranchName()));
+                ccell.apply(row, c++).setCellValue(m.getCategory() == null ? "" : m.getCategory().getDisplayName());
 
-                // 소요기간(완료일 - 요청일)
+                // ✅ 내용/작업내용은 좌측정렬로 보기 좋게(원하면 bodyCenter로 바꿔도 됨)
+                lcell.apply(row, c++).setCellValue(safe(titleOnly(m)));
+
+                ccell.apply(row, c++).setCellValue(m.getStatus() == null ? "" : m.getStatus().kr());
+                ccell.apply(row, c++).setCellValue(m.getSubmittedAt() == null ? "" : m.getSubmittedAt().format(dtf));
+                ccell.apply(row, c++).setCellValue(
+                        m.getWorkStartDate() == null ? "" : m.getWorkStartDate().toLocalDate().format(df));
+                ccell.apply(row, c++)
+                        .setCellValue(m.getWorkEndDate() == null ? "" : m.getWorkEndDate().toLocalDate().format(df));
+                ccell.apply(row, c++)
+                        .setCellValue(m.getWorkCompletedAt() == null ? "" : m.getWorkCompletedAt().format(dtf));
+
+                // ✅ 소요기간(완료 - 요청) : 일/시간/분
                 LocalDateTime submittedAt = m.getSubmittedAt();
                 LocalDateTime completedAt = m.getWorkCompletedAt();
 
                 String durationText = "";
-                if (submittedAt != null && completedAt != null) {
-                    long days = ChronoUnit.DAYS.between(submittedAt.toLocalDate(), completedAt.toLocalDate());
-                    days = Math.max(days, 0);
-                    durationText = days + "일";
-                }
-                row.createCell(c++).setCellValue(durationText);
+                if (submittedAt != null && completedAt != null && !completedAt.isBefore(submittedAt)) {
+                    long totalMinutes = ChronoUnit.MINUTES.between(submittedAt, completedAt);
 
-                // ✅ APPROVED attempt에서 견적/최종견적 가져오기
+                    long days = totalMinutes / (60 * 24);
+                    long hours = (totalMinutes % (60 * 24)) / 60;
+                    long minutes = totalMinutes % 60;
+
+                    StringBuilder sb = new StringBuilder();
+                    if (days > 0)
+                        sb.append(days).append("일 ");
+                    if (hours > 0)
+                        sb.append(hours).append("시간 ");
+                    sb.append(minutes).append("분");
+                    durationText = sb.toString().trim();
+                }
+                ccell.apply(row, c++).setCellValue(durationText);
+
                 MaintenanceEstimateAttempt approvedAttempt = approvedMap.get(m.getId());
 
-                String estimateAmount = (approvedAttempt == null) ? "" : safe(approvedAttempt.getEstimateAmount());
-                String finalAmount = (approvedAttempt == null || approvedAttempt.getFinalAmount() == null)
-                        ? ""
-                        : approvedAttempt.getFinalAmount().toPlainString();
+                String estimateAmount = "";
+                String finalAmount = "";
+
+                if (approvedAttempt != null) {
+
+                    if (approvedAttempt.getEstimateAmount() != null && !approvedAttempt.getEstimateAmount().isBlank()) {
+                        try {
+                            estimateAmount = moneyFmt.format(
+                                    Long.parseLong(approvedAttempt.getEstimateAmount().replaceAll("[^0-9]", "")));
+                        } catch (Exception ignored) {
+                        }
+                    }
+
+                    if (approvedAttempt.getFinalAmount() != null) {
+                        finalAmount = moneyFmt.format(approvedAttempt.getFinalAmount());
+                    }
+                }
 
                 row.createCell(c++).setCellValue(estimateAmount);
                 row.createCell(c++).setCellValue(finalAmount);
 
-                // 작업내용(result_comment)
-                row.createCell(c++).setCellValue(safe(m.getResultComment()));
+                lcell.apply(row, c++).setCellValue(safe(m.getResultComment())); // ✅ 작업내용 좌측정렬
             }
 
             // ================= 컬럼 너비 =================
             int[] widths = {
-                    14, 18, 30, 16, 16,
-                    14, 14, 14, 14,
-                    10, 14, 14, 40
+                    14, 9, 6, 30, 10,
+                    17, 14, 14, 17,
+                    17, 14, 14, 40
             };
             for (int i = 0; i < widths.length; i++) {
                 sheet.setColumnWidth(i, widths[i] * 256);
             }
 
             ByteArrayOutputStream bos = new ByteArrayOutputStream();
-            wb.write(bos);
+            wb.write(bos); // ✅ 여기서 IOException 가능
             return bos.toByteArray();
 
+        } catch (java.io.IOException e) {
+            throw new ExceptionApi400("엑셀 생성 실패(IO): " + e.getMessage());
         } catch (Exception e) {
             throw new ExceptionApi400("엑셀 생성 실패: " + e.getMessage());
         }
+
     }
 
     private String safe(String s) {

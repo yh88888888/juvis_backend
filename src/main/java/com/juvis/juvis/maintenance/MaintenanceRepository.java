@@ -120,23 +120,29 @@ public interface MaintenanceRepository extends JpaRepository<Maintenance, Long> 
       where (:status is null or m.status = :status)
         and (:category is null or m.category = :category)
         and (:branchId is null or m.branch.id = :branchId)
-        and (:from is null or m.createdAt >= :from)
-        and (:to is null or m.createdAt < :to)
+        and (:createdFrom is null or m.createdAt >= :createdFrom)
+        and (:createdTo is null or m.createdAt < :createdTo)
+        and (:completedFrom is null or m.workCompletedAt >= :completedFrom)
+        and (:completedTo is null or m.workCompletedAt < :completedTo)
       """, countQuery = """
       select count(m)
       from Maintenance m
       where (:status is null or m.status = :status)
         and (:category is null or m.category = :category)
         and (:branchId is null or m.branch.id = :branchId)
-        and (:from is null or m.createdAt >= :from)
-        and (:to is null or m.createdAt < :to)
+        and (:createdFrom is null or m.createdAt >= :createdFrom)
+        and (:createdTo is null or m.createdAt < :createdTo)
+        and (:completedFrom is null or m.workCompletedAt >= :completedFrom)
+        and (:completedTo is null or m.workCompletedAt < :completedTo)
       """)
   Page<Maintenance> searchForOps(
       @Param("status") MaintenanceStatus status,
       @Param("category") MaintenanceCategory category,
       @Param("branchId") Long branchId,
-      @Param("from") LocalDateTime from,
-      @Param("to") LocalDateTime to,
+      @Param("createdFrom") LocalDateTime createdFrom,
+      @Param("createdTo") LocalDateTime createdTo,
+      @Param("completedFrom") LocalDateTime completedFrom,
+      @Param("completedTo") LocalDateTime completedTo,
       Pageable pageable);
 
 }

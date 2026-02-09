@@ -287,8 +287,18 @@ public class MaintenanceController {
             @RequestParam(name = "category", required = false) MaintenanceCategory category,
             @RequestParam(name = "branchId", required = false) Long branchId,
             @RequestParam(name = "yearMonth", required = false) String yearMonth,
-            @PageableDefault(page = 0, size = 20) @SortDefault(sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
-        Page<Maintenance> result = maintenanceService.getOpsList(currentUser, status, category, branchId, yearMonth,
+            @RequestParam(name = "completedYearMonth", required = false) String completedYearMonth,
+            @RequestParam(name = "sortField", required = false, defaultValue = "createdAt") String sortField,
+
+            @PageableDefault(page = 0, size = 20) Pageable pageable) {
+        Page<Maintenance> result = maintenanceService.getOpsList(
+                currentUser,
+                status,
+                category,
+                branchId,
+                yearMonth,
+                completedYearMonth,
+                sortField,
                 pageable);
 
         return Resp.ok(result.map(MaintenanceResponse.SimpleDTO::new));
