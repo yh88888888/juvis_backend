@@ -88,6 +88,7 @@ public class MaintenanceResponse {
 
         // 견적
         private BigDecimal estimateAmount;
+        private BigDecimal finalAmount;
         private String estimateComment;
         private LocalDateTime workStartDate;
         private LocalDateTime workEndDate;
@@ -182,13 +183,26 @@ public class MaintenanceResponse {
                 this.vendorSubmittedAt = latest.getVendorSubmittedAt();
 
                 // ✅✅✅ 최신 attempt의 작업자 정보도 같이 내려줌
-                // (EstimateAttemptDTO에 workerName/Phone/TeamLabel이 있어야 함)
                 this.workerName = latest.getWorkerName();
                 this.workerPhone = latest.getWorkerPhone();
                 this.workerTeamLabel = latest.getWorkerTeamLabel();
 
+                // ✅✅✅ finalAmount는 "승인된 attempt 중 최신"에서 가져오기
+                java.math.BigDecimal fa = null;
+                if (this.estimateAttempts != null && !this.estimateAttempts.isEmpty()) {
+                    for (int i = this.estimateAttempts.size() - 1; i >= 0; i--) {
+                        EstimateAttemptDTO a = this.estimateAttempts.get(i);
+                        if ("APPROVED".equals(a.getHqDecision()) && a.getFinalAmount() != null) {
+                            fa = a.getFinalAmount();
+                            break;
+                        }
+                    }
+                }
+                this.finalAmount = fa;
+
             } else {
                 this.estimateAmount = m.getEstimateAmount();
+                this.finalAmount = null; // ✅ attempt 없으면 최종견적가도 없음
                 this.estimateComment = m.getEstimateComment();
                 this.workStartDate = m.getWorkStartDate();
                 this.workEndDate = m.getWorkEndDate();
@@ -286,6 +300,7 @@ public class MaintenanceResponse {
 
         private int attemptNo;
         private String estimateAmount;
+        private BigDecimal finalAmount;
         private String estimateComment;
         private LocalDateTime workStartDate;
         private LocalDateTime workEndDate;
@@ -333,6 +348,7 @@ public class MaintenanceResponse {
             EstimateAttemptDTO dto = new EstimateAttemptDTO();
             dto.setAttemptNo(a.getAttemptNo());
             dto.setEstimateAmount(a.getEstimateAmount());
+            dto.setFinalAmount(a.getFinalAmount());
             dto.setEstimateComment(a.getEstimateComment());
             dto.setWorkStartDate(a.getWorkStartDate());
             dto.setWorkEndDate(a.getWorkEndDate());

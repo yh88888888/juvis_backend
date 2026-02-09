@@ -92,17 +92,17 @@ public class Notification {
                 } else if (status == MaintenanceStatus.COMPLETED) {
                     msg = "작업이 완료되었습니다. 결과를 확인해주세요.";
                 } else {
-                    msg = "요청 상태가 변경되었습니다.";
+                    msg = "요청서가 승인되었습니다.";
                 }
             }
 
             case BRANCH -> {
                 if (status == MaintenanceStatus.APPROVAL_PENDING) {
-                    msg = "업체 견적이 제출되었습니다. 본사 승인 대기 중입니다.";
+                    msg = "업체에서 제출한 일정에 대해 본사승인 대기 중입니다.";
                 } else if (status == MaintenanceStatus.IN_PROGRESS) {
                     msg = "작업 일정이 확정되었습니다. 업체 연락처를 확인해주세요.";
                 } else {
-                    msg = "요청 상태가 변경되었습니다.";
+                    msg = "요청서가 승인되었습니다.";
                 }
             }
 
