@@ -113,14 +113,13 @@ public interface MaintenanceRepository extends JpaRepository<Maintenance, Long> 
 
   Optional<Maintenance> findByIdAndVendor_Id(Long id, Integer vendorId);
 
+  @EntityGraph(attributePaths = { "branch", "requester" })
   @Query(value = """
-      select distinct m
+      select m
       from Maintenance m
-      join fetch m.branch b
-      join fetch m.requester r
       where (:status is null or m.status = :status)
         and (:category is null or m.category = :category)
-        and (:branchId is null or b.id = :branchId)
+        and (:branchId is null or m.branch.id = :branchId)
         and (:from is null or m.createdAt >= :from)
         and (:to is null or m.createdAt < :to)
       """, countQuery = """

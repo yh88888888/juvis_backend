@@ -4,6 +4,7 @@ import java.io.ByteArrayOutputStream;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -1020,111 +1021,144 @@ public class MaintenanceService {
     }
 
     @Transactional(readOnly = true)
-    public byte[] exportOpsExcel(
-            LoginUser loginUser,
-            MaintenanceStatus status,
-            MaintenanceCategory category,
-            Long branchId,
-            String yearMonth) {
+public byte[] exportOpsExcel(
+        LoginUser loginUser,
+        MaintenanceStatus status,
+        MaintenanceCategory category,
+        Long branchId,
+        String yearMonth) {
 
-        if (loginUser == null ||
-                !(loginUser.role() == UserRole.HQ || loginUser.role() == UserRole.VENDOR)) {
-            throw new ExceptionApi403("HQ 또는 VENDOR 권한이 필요합니다.");
-        }
-
-        LocalDateTime from = null;
-        LocalDateTime to = null;
-        if (yearMonth != null && !yearMonth.isBlank()) {
-            YearMonth ym = YearMonth.parse(yearMonth.trim());
-            from = ym.atDay(1).atStartOfDay();
-            to = ym.plusMonths(1).atDay(1).atStartOfDay();
-        }
-
-        var pageable = PageRequest.of(0, 20000, Sort.by(Sort.Direction.DESC, "createdAt"));
-        var page = maintenanceRepository.searchForOps(status, category, branchId, from, to, pageable);
-        var rows = page.getContent();
-
-        try (Workbook wb = new XSSFWorkbook()) {
-            Sheet sheet = wb.createSheet("requests");
-
-            // ================= 헤더 스타일 =================
-            Font headerFont = wb.createFont();
-            headerFont.setBold(true);
-
-            CellStyle headerStyle = wb.createCellStyle();
-            headerStyle.setFont(headerFont);
-            headerStyle.setFillForegroundColor(IndexedColors.GREY_25_PERCENT.getIndex());
-            headerStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
-            headerStyle.setBorderBottom(BorderStyle.THIN);
-
-            // ================= 헤더 =================
-            String[] headers = {
-                    "고유번호",
-                    "지점",
-                    "제목",
-                    "분야야",
-                    "상태",
-                    "생성일",
-                    "제출일",
-                    "작업시작일",
-                    "작업종료일"
-            };
-
-            Row headerRow = sheet.createRow(0);
-            for (int i = 0; i < headers.length; i++) {
-                Cell c = headerRow.createCell(i);
-                c.setCellValue(headers[i]);
-                c.setCellStyle(headerStyle);
-            }
-
-            DateTimeFormatter df = DateTimeFormatter.ofPattern("yyyy-MM-dd");
-
-            // ================= 데이터 =================
-            int rowIdx = 1;
-
-            for (Maintenance m : rows) {
-                Row row = sheet.createRow(rowIdx++);
-                int c = 0;
-
-                row.createCell(c++).setCellValue(m.getId());
-                row.createCell(c++).setCellValue(m.getBranch() == null ? "" : safe(m.getBranch().getBranchName()));
-                row.createCell(c++).setCellValue(safe(m.getTitle()));
-                row.createCell(c++).setCellValue(m.getCategory() == null ? "" : m.getCategory().getDisplayName());
-                row.createCell(c++).setCellValue(m.getStatus() == null ? "" : m.getStatus().kr());
-                row.createCell(c++)
-                        .setCellValue(m.getCreatedAt() == null ? "" : m.getCreatedAt().toLocalDate().format(df));
-                row.createCell(c++)
-                        .setCellValue(m.getSubmittedAt() == null ? "" : m.getSubmittedAt().toLocalDate().format(df));
-                row.createCell(c++).setCellValue(
-                        m.getWorkStartDate() == null ? "" : m.getWorkStartDate().toLocalDate().format(df));
-                row.createCell(c++)
-                        .setCellValue(m.getWorkEndDate() == null ? "" : m.getWorkEndDate().toLocalDate().format(df));
-            }
-
-            // ================= 컬럼 너비 =================
-            int[] widths = {
-                    18,
-                    18,
-                    30,
-                    16,
-                    16,
-                    14,
-                    14,
-                    14,
-                    14
-            };
-            for (int i = 0; i < widths.length; i++) {
-                sheet.setColumnWidth(i, widths[i] * 256);
-            }
-
-            ByteArrayOutputStream bos = new ByteArrayOutputStream();
-            wb.write(bos);
-            return bos.toByteArray();
-
-        } catch (Exception e) {
-            throw new ExceptionApi400("엑셀 생성 실패: " + e.getMessage());
-        }
+    if (loginUser == null ||
+            !(loginUser.role() == UserRole.HQ || loginUser.role() == UserRole.VENDOR)) {
+        throw new ExceptionApi403("HQ 또는 VENDOR 권한이 필요합니다.");
     }
+
+    LocalDateTime from = null;
+    LocalDateTime to = null;
+    if (yearMonth != null && !yearMonth.isBlank()) {
+        YearMonth ym = YearMonth.parse(yearMonth.trim());
+        from = ym.atDay(1).atStartOfDay();
+        to = ym.plusMonths(1).atDay(1).atStartOfDay();
+    }
+
+    var pageable = PageRequest.of(0, 20000, Sort.by(Sort.Direction.DESC, "createdAt"));
+    var page = maintenanceRepository.searchForOps(status, category, branchId, from, to, pageable);
+    var rows = page.getContent();
+
+    // ✅ (중요) APPROVED attempt를 한 번에 가져와서 Map으로 만든다 (N+1 방지)
+    List<Long> mids = rows.stream()
+            .map(Maintenance::getId)
+            .toList();
+
+    Map<Long, MaintenanceEstimateAttempt> approvedMap =
+            attemptRepository.findLatestApprovedAttempts(mids).stream()
+                    .collect(Collectors.toMap(
+                            a -> a.getMaintenance().getId(),
+                            a -> a
+                    ));
+
+    try (Workbook wb = new XSSFWorkbook()) {
+        Sheet sheet = wb.createSheet("requests");
+
+        // ================= 헤더 스타일 =================
+        Font headerFont = wb.createFont();
+        headerFont.setBold(true);
+
+        CellStyle headerStyle = wb.createCellStyle();
+        headerStyle.setFont(headerFont);
+        headerStyle.setFillForegroundColor(IndexedColors.GREY_25_PERCENT.getIndex());
+        headerStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+        headerStyle.setBorderBottom(BorderStyle.THIN);
+
+        // ================= 헤더 =================
+        String[] headers = {
+                "고유번호",
+                "지점",
+                "내용",
+                "분야",
+                "상태",
+                "요청일",
+                "(견적)시작일",
+                "(견적)종료일",
+                "완료일",
+                "소요기간",
+                "견적가",
+                "최종견적가",
+                "작업내용"
+        };
+
+        Row headerRow = sheet.createRow(0);
+        for (int i = 0; i < headers.length; i++) {
+            Cell cell = headerRow.createCell(i);
+            cell.setCellValue(headers[i]);
+            cell.setCellStyle(headerStyle);
+        }
+
+        DateTimeFormatter df = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+
+        // ================= 데이터 =================
+        int rowIdx = 1;
+
+        for (Maintenance m : rows) {
+            Row row = sheet.createRow(rowIdx++);
+            int c = 0;
+
+            row.createCell(c++).setCellValue(m.getId());
+            row.createCell(c++).setCellValue(m.getBranch() == null ? "" : safe(m.getBranch().getBranchName()));
+            row.createCell(c++).setCellValue(safe(m.getTitle()));
+            row.createCell(c++).setCellValue(m.getCategory() == null ? "" : m.getCategory().getDisplayName());
+            row.createCell(c++).setCellValue(m.getStatus() == null ? "" : m.getStatus().kr());
+
+            row.createCell(c++).setCellValue(m.getSubmittedAt() == null ? "" : m.getSubmittedAt().toLocalDate().format(df));
+            row.createCell(c++).setCellValue(m.getWorkStartDate() == null ? "" : m.getWorkStartDate().toLocalDate().format(df));
+            row.createCell(c++).setCellValue(m.getWorkEndDate() == null ? "" : m.getWorkEndDate().toLocalDate().format(df));
+            row.createCell(c++).setCellValue(m.getWorkCompletedAt() == null ? "" : m.getWorkCompletedAt().toLocalDate().format(df));
+
+            // 소요기간(완료일 - 요청일)
+            LocalDateTime submittedAt = m.getSubmittedAt();
+            LocalDateTime completedAt = m.getWorkCompletedAt();
+
+            String durationText = "";
+            if (submittedAt != null && completedAt != null) {
+                long days = ChronoUnit.DAYS.between(submittedAt.toLocalDate(), completedAt.toLocalDate());
+                days = Math.max(days, 0);
+                durationText = days + "일";
+            }
+            row.createCell(c++).setCellValue(durationText);
+
+            // ✅ APPROVED attempt에서 견적/최종견적 가져오기
+            MaintenanceEstimateAttempt approvedAttempt = approvedMap.get(m.getId());
+
+            String estimateAmount = (approvedAttempt == null) ? "" : safe(approvedAttempt.getEstimateAmount());
+            String finalAmount = (approvedAttempt == null || approvedAttempt.getFinalAmount() == null)
+                    ? ""
+                    : approvedAttempt.getFinalAmount().toPlainString();
+
+            row.createCell(c++).setCellValue(estimateAmount);
+            row.createCell(c++).setCellValue(finalAmount);
+
+            // 작업내용(result_comment)
+            row.createCell(c++).setCellValue(safe(m.getResultComment()));
+        }
+
+        // ================= 컬럼 너비 =================
+        int[] widths = {
+                10, 18, 30, 16, 16,
+                14, 14, 14, 14,
+                10, 14, 14, 40
+        };
+        for (int i = 0; i < widths.length; i++) {
+            sheet.setColumnWidth(i, widths[i] * 256);
+        }
+
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        wb.write(bos);
+        return bos.toByteArray();
+
+    } catch (Exception e) {
+        throw new ExceptionApi400("엑셀 생성 실패: " + e.getMessage());
+    }
+}
 
     private String safe(String s) {
         return s == null ? "" : s;
