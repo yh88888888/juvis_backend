@@ -19,6 +19,7 @@ public class MaintenanceResponse {
     @AllArgsConstructor
     public static class SimpleDTO {
         private Long id;
+        private String requestNo;
         private String branchName;
         private String requesterName;
         private BigDecimal estimateAmount;
@@ -37,6 +38,7 @@ public class MaintenanceResponse {
 
         public SimpleDTO(Maintenance m) {
             this.id = m.getId();
+            this.requestNo = m.getRequestNo();
             this.branchName = m.getBranch() != null ? m.getBranch().getBranchName() : null;
             this.requesterName = m.getRequester() != null ? m.getRequester().getName() : null;
             this.estimateAmount = m.getEstimateAmount();

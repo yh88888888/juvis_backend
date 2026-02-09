@@ -96,6 +96,10 @@ CREATE TABLE vendor_worker (
 -- =========================================================
 CREATE TABLE maintenance_request (
   request_id     BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+
+  -- ✅ 업무용 요청번호 (ex: 260209-001)
+  request_no     VARCHAR(20) NULL,
+
   branch_id      BIGINT UNSIGNED NOT NULL,
   requester_id   BIGINT UNSIGNED NOT NULL,
 
@@ -131,13 +135,12 @@ CREATE TABLE maintenance_request (
   vendor_id        BIGINT UNSIGNED NULL,
   vendor_worker_id BIGINT UNSIGNED NULL,
 
-  -- (레거시/참조용) 현재는 attempt 테이블이 정본
+  -- (레거시/참조용)
   estimate_amount         DECIMAL(15,2) NULL,
-  estimate_comment        TINYTEXT         NULL,
+  estimate_comment        TINYTEXT NULL,
 
-  -- ✅ 엔티티(LocalDateTime) 기준으로 DATETIME(6)
-  work_start_date         DATETIME(6)  NULL,
-  work_end_date           DATETIME(6)  NULL,
+  work_start_date         DATETIME(6) NULL,
+  work_end_date           DATETIME(6) NULL,
 
   estimate_resubmit_count INT NOT NULL DEFAULT 0,
 
@@ -160,9 +163,13 @@ CREATE TABLE maintenance_request (
   estimate_approved_at DATETIME(6) NULL,
 
   created_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  updated_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                    ON UPDATE CURRENT_TIMESTAMP,
 
   PRIMARY KEY (request_id),
+
+  -- ✅ 업무번호는 UNIQUE
+  UNIQUE KEY uk_request_no (request_no),
 
   KEY idx_mr_branch (branch_id),
   KEY idx_mr_status (status),
@@ -195,6 +202,12 @@ CREATE TABLE maintenance_request (
   CONSTRAINT fk_mr_estimate_approved_by
     FOREIGN KEY (estimate_approved_by) REFERENCES user_tb(user_id)
     ON UPDATE RESTRICT ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE daily_sequence (
+  seq_date DATE NOT NULL,
+  seq INT NOT NULL,
+  PRIMARY KEY (seq_date)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- =========================================================
@@ -449,3 +462,5 @@ CREATE TABLE user_device (
     FOREIGN KEY (user_id) REFERENCES user_tb(user_id)
     ON UPDATE RESTRICT ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+

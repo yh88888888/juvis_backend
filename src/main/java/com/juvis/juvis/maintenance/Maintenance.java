@@ -32,6 +32,9 @@ public class Maintenance {
    @Column(name = "request_id")
    private Long id;
 
+@Column(name = "request_no", length = 20, unique = true)
+private String requestNo;
+
    // 지점
    @ManyToOne(fetch = FetchType.LAZY)
    @JoinColumn(name = "branch_id", nullable = false)
