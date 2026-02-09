@@ -35,6 +35,7 @@ public class MaintenanceResponse {
 
         private LocalDateTime createdAt;
         private LocalDateTime submittedAt;
+        private LocalDateTime completedAt;
 
         public SimpleDTO(Maintenance m) {
             this.id = m.getId();
@@ -57,6 +58,7 @@ public class MaintenanceResponse {
 
             this.createdAt = m.getCreatedAt();
             this.submittedAt = m.getSubmittedAt();
+            this.completedAt = m.getWorkCompletedAt();
         }
     }
 
@@ -145,8 +147,13 @@ public class MaintenanceResponse {
             this.title = m.getTitle();
             this.description = m.getDescription();
             this.status = m.getStatus();
-            this.category = m.getCategory().name();
-            this.categoryName = m.getCategory().getDisplayName();
+            if (m.getCategory() != null) {
+                this.category = m.getCategory().name();
+                this.categoryName = m.getCategory().getDisplayName();
+            } else {
+                this.category = null;
+                this.categoryName = null;
+            }
 
             // ✅ 분리된 사진 리스트
             this.requestPhotoUrls = (requestPhotoUrls == null) ? java.util.List.of() : requestPhotoUrls;

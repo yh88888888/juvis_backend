@@ -1040,6 +1040,31 @@ public class MaintenanceService {
         return toDetailDTO(m);
     }
 
+    private String titleOnly(Maintenance m) {
+        String t = (m.getTitle() == null) ? "" : m.getTitle().trim();
+        if (t.isEmpty())
+            return "";
+
+        if (m.getCategory() == null)
+            return t;
+
+        String cat = m.getCategory().getDisplayName(); // 예: "도장"
+        if (cat == null || cat.isBlank())
+            return t;
+
+        cat = cat.trim();
+
+        String p1 = cat + " - ";
+        String p2 = cat + "-";
+
+        if (t.startsWith(p1))
+            return t.substring(p1.length()).trim();
+        if (t.startsWith(p2))
+            return t.substring(p2.length()).trim();
+
+        return t;
+    }
+
     @Transactional(readOnly = true)
     public byte[] exportOpsExcel(
             LoginUser loginUser,
@@ -1092,8 +1117,8 @@ public class MaintenanceService {
             String[] headers = {
                     "문서번호",
                     "지점",
-                    "내용",
                     "분야",
+                    "내용",
                     "상태",
                     "요청일",
                     "(견적)시작일",
@@ -1123,10 +1148,9 @@ public class MaintenanceService {
 
                 row.createCell(c++).setCellValue(safe(m.getRequestNo())); // ✅ m.getId() 대신
                 row.createCell(c++).setCellValue(m.getBranch() == null ? "" : safe(m.getBranch().getBranchName()));
-                row.createCell(c++).setCellValue(safe(m.getTitle()));
                 row.createCell(c++).setCellValue(m.getCategory() == null ? "" : m.getCategory().getDisplayName());
+                row.createCell(c++).setCellValue(safe(titleOnly(m)));
                 row.createCell(c++).setCellValue(m.getStatus() == null ? "" : m.getStatus().kr());
-
                 row.createCell(c++)
                         .setCellValue(m.getSubmittedAt() == null ? "" : m.getSubmittedAt().toLocalDate().format(df));
                 row.createCell(c++).setCellValue(
