@@ -133,13 +133,10 @@ public class MaintenanceService {
         if (photos != null && !photos.isEmpty()) {
 
             List<MaintenancePhoto> entities = photos.stream()
-                    // 🔒 안전 필터 (핵심)
                     .filter(p -> p.getFileKey() != null && !p.getFileKey().isBlank())
-                    .filter(p -> p.getUrl() != null && !p.getUrl().isBlank())
                     .map(p -> MaintenancePhoto.of(
                             saved,
                             p.getFileKey().trim(),
-                            p.getUrl().trim(),
                             MaintenancePhoto.PhotoType.REQUEST))
                     .toList();
 
@@ -147,7 +144,6 @@ public class MaintenanceService {
                 maintenancePhotoRepository.saveAll(entities);
             }
         }
-
         // LAZY 초기화
         saved.getBranch().getBranchName();
 
@@ -622,16 +618,16 @@ public class MaintenanceService {
         attemptRepository.save(attempt);
 
         // 9) ✅ 견적 사진 메타 저장 (ESTIMATE + attemptNo)
+        // 9) ✅ 견적 사진 메타 저장 (ESTIMATE + attemptNo) : fileKey만 저장
         if (dto.getEstimatePhotos() != null && !dto.getEstimatePhotos().isEmpty()) {
 
             List<MaintenanceRequest.SubmitEstimateDTO.EstimatePhotoDTO> valid = dto.getEstimatePhotos().stream()
                     .filter(p -> p.getFileKey() != null && !p.getFileKey().isBlank())
-                    .filter(p -> p.getPublicUrl() != null && !p.getPublicUrl().isBlank())
                     .toList();
 
             if (!valid.isEmpty()) {
 
-                // ✅ 꼬임 방지
+                // ✅ 꼬임 방지: 같은 attemptNo 기존 사진 제거
                 maintenancePhotoRepository.deleteByMaintenanceIdAndPhotoTypeAndAttemptNo(
                         m.getId(),
                         MaintenancePhoto.PhotoType.ESTIMATE,
@@ -641,7 +637,6 @@ public class MaintenanceService {
                         .map(p -> MaintenancePhoto.ofEstimate(
                                 m,
                                 p.getFileKey().trim(),
-                                p.getPublicUrl().trim(),
                                 nextAttemptNo))
                         .toList();
 
@@ -719,6 +714,7 @@ public class MaintenanceService {
         attemptRepository.save(latest);
 
         // ✅ 사진 갱신(해당 attemptNo만)
+        // ✅ 사진 갱신(해당 attemptNo만)
         int attemptNo = latest.getAttemptNo();
 
         maintenancePhotoRepository.deleteByMaintenanceIdAndPhotoTypeAndAttemptNo(
@@ -727,16 +723,15 @@ public class MaintenanceService {
                 attemptNo);
 
         if (dto.getEstimatePhotos() != null && !dto.getEstimatePhotos().isEmpty()) {
+
             List<MaintenanceRequest.SubmitEstimateDTO.EstimatePhotoDTO> valid = dto.getEstimatePhotos().stream()
                     .filter(p -> p.getFileKey() != null && !p.getFileKey().isBlank())
-                    .filter(p -> p.getPublicUrl() != null && !p.getPublicUrl().isBlank())
                     .toList();
 
             List<MaintenancePhoto> photos = valid.stream()
                     .map(p -> MaintenancePhoto.ofEstimate(
                             m,
                             p.getFileKey().trim(),
-                            p.getPublicUrl().trim(),
                             attemptNo))
                     .toList();
 
@@ -811,7 +806,6 @@ public class MaintenanceService {
 
             List<MaintenanceRequest.SubmitEstimateDTO.EstimatePhotoDTO> valid = incoming.stream()
                     .filter(p -> p.getFileKey() != null && !p.getFileKey().isBlank())
-                    .filter(p -> p.getPublicUrl() != null && !p.getPublicUrl().isBlank())
                     .toList();
 
             maintenancePhotoRepository.deleteByMaintenanceIdAndPhotoTypeAndAttemptNo(
@@ -824,7 +818,6 @@ public class MaintenanceService {
                         .map(p -> MaintenancePhoto.ofEstimate(
                                 m,
                                 p.getFileKey().trim(),
-                                p.getPublicUrl().trim(),
                                 current.getAttemptNo()))
                         .toList();
 
@@ -894,14 +887,14 @@ public class MaintenanceService {
         }
 
         // ✅ RESULT 사진 저장
+        // ✅ RESULT 사진 저장 (fileKey만)
         if (dto.getResultPhotos() != null && !dto.getResultPhotos().isEmpty()) {
+
             List<MaintenancePhoto> photos = dto.getResultPhotos().stream()
                     .filter(p -> p.getFileKey() != null && !p.getFileKey().isBlank())
-                    .filter(p -> p.getPublicUrl() != null && !p.getPublicUrl().isBlank())
                     .map(p -> MaintenancePhoto.of(
                             m,
                             p.getFileKey().trim(),
-                            p.getPublicUrl().trim(),
                             MaintenancePhoto.PhotoType.RESULT))
                     .toList();
 
@@ -955,14 +948,14 @@ public class MaintenanceService {
         Maintenance saved = maintenanceRepository.save(m);
 
         // ✅ 요청 사진 저장 (REQUEST)
+        // ✅ 요청 사진 저장 (REQUEST) - fileKey만
         if (dto.getPhotos() != null && !dto.getPhotos().isEmpty()) {
+
             List<MaintenancePhoto> photos = dto.getPhotos().stream()
                     .filter(p -> p.getFileKey() != null && !p.getFileKey().isBlank())
-                    .filter(p -> p.getUrl() != null && !p.getUrl().isBlank())
                     .map(p -> MaintenancePhoto.of(
                             saved,
                             p.getFileKey().trim(),
-                            p.getUrl().trim(),
                             MaintenancePhoto.PhotoType.REQUEST))
                     .toList();
 

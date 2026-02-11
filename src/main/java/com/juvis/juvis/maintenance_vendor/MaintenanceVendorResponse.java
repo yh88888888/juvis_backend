@@ -26,6 +26,7 @@ public class MaintenanceVendorResponse {
     public static class ListItemDTO {
         private Long id;
         private String title;
+        private String description; 
         private MaintenanceStatus status;
         private String branchName;
         private String requesterName;
@@ -34,6 +35,7 @@ public class MaintenanceVendorResponse {
         public ListItemDTO(Maintenance m) {
             this.id = m.getId();
             this.title = m.getTitle();
+            this.description = m.getDescription(); 
             this.status = m.getStatus();
             this.branchName = m.getBranch() != null ? m.getBranch().getBranchName() : null;
             this.requesterName = m.getRequester() != null ? m.getRequester().getName() : null;

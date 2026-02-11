@@ -1,16 +1,11 @@
 package com.juvis.juvis.maintenance_vendor.maintenance_photo;
 
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.*;
 
 import com.juvis.juvis._core.util.Resp;
 import com.juvis.juvis.user.LoginUser;
-
-import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
 
 import lombok.RequiredArgsConstructor;
 
@@ -27,13 +22,7 @@ public class MaintenancePhotoController {
             @AuthenticationPrincipal LoginUser loginUser,
             @RequestBody AttachPhotoRequest dto
     ) {
-        maintenancePhotoService.attach(
-                maintenanceId,
-                loginUser.id(),
-                dto
-        );
+        maintenancePhotoService.attach(maintenanceId, loginUser.id(), dto);
         return Resp.ok(null);
     }
 }
-
-   

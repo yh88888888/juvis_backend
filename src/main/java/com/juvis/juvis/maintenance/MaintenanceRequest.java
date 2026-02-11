@@ -28,8 +28,16 @@ public class MaintenanceRequest {
     @Data
     public static class PhotoDTO {
         private String fileKey;
-        @JsonAlias({ "publicUrl" })
+
+        @JsonAlias({ "publicUrl", "url" })
         private String url;
+
+        public String getUrl() {
+            if (url == null)
+                return null;
+            String t = url.trim();
+            return t.isEmpty() ? null : t;
+        }
     }
 
     @Getter
@@ -76,7 +84,7 @@ public class MaintenanceRequest {
     public static class CompleteWorkDTO {
         private String resultComment; // 필수
         private LocalDateTime completedAt; // 선택 (원하면 안 써도 됨)
-        private List<ResultPhotoDTO> resultPhotos; 
+        private List<ResultPhotoDTO> resultPhotos;
         private BigDecimal finalAmount;
 
         @Getter

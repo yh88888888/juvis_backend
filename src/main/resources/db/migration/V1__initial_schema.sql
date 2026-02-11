@@ -137,7 +137,7 @@ CREATE TABLE maintenance_request (
 
   -- (레거시/참조용)
   estimate_amount         DECIMAL(15,2) NULL,
-  estimate_comment        TINYTEXT NULL,
+  estimate_comment        LONGTEXT NULL,
 
   work_start_date         DATETIME(6) NULL,
   work_end_date           DATETIME(6) NULL,
@@ -149,7 +149,7 @@ CREATE TABLE maintenance_request (
   request_rejected_reason  VARCHAR(500) NULL,
   estimate_rejected_reason VARCHAR(500) NULL,
 
-  result_comment     TINYTEXT NULL,
+  result_comment     LONGTEXT NULL,
   result_photo_url   VARCHAR(2048) NULL,
   work_completed_at  DATETIME(6) NULL,
 
@@ -324,11 +324,14 @@ CREATE TABLE maintenance_photo (
 
   maintenance_id BIGINT UNSIGNED NOT NULL,
 
-  file_key VARCHAR(255) NOT NULL,
-  public_url VARCHAR(1000) NOT NULL,
+  -- ✅ S3 Object Key (ex: maintenance/2026-02-10/uuid.jpg)
+  file_key VARCHAR(500) NOT NULL,
 
-  photo_type VARCHAR(20) NOT NULL COMMENT 'REQUEST/ESTIMATE/RESULT',
-  attempt_no INT NULL COMMENT 'ESTIMATE only: 1 or 2, otherwise NULL',
+  -- ✅ REQUEST/ESTIMATE/RESULT
+  photo_type VARCHAR(20) NOT NULL,
+
+  -- ✅ REQUEST/RESULT는 NULL, ESTIMATE만 1 또는 2
+  attempt_no INT NULL,
 
   created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
 

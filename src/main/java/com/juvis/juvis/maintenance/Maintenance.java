@@ -32,8 +32,8 @@ public class Maintenance {
    @Column(name = "request_id")
    private Long id;
 
-@Column(name = "request_no", length = 20, unique = true)
-private String requestNo;
+   @Column(name = "request_no", length = 20, unique = true)
+   private String requestNo;
 
    // 지점
    @ManyToOne(fetch = FetchType.LAZY)
@@ -89,7 +89,7 @@ private String requestNo;
    private BigDecimal estimateAmount;
 
    @Lob
-   @Column(name = "estimate_comment")
+   @Column(name = "estimate_comment", columnDefinition = "LONGTEXT")
    private String estimateComment;
 
    @Column(name = "work_start_date")
@@ -109,7 +109,7 @@ private String requestNo;
     * =======================
     */
    @Lob
-   @Column(name = "result_comment")
+   @Column(name = "result_comment", columnDefinition = "LONGTEXT")
    private String resultComment;
 
    // (레거시) 단일 결과사진 URL - 다중 결과사진은 maintenance_photo로 관리

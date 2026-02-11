@@ -27,6 +27,7 @@ public class MaintenanceResponse {
         private LocalDateTime workStartDate;
 
         private String title;
+        private String description;
         private MaintenanceStatus status;
 
         // ✅ 추가: Flutter가 읽을 값
@@ -45,6 +46,7 @@ public class MaintenanceResponse {
             this.estimateAmount = m.getEstimateAmount();
             this.workStartDate = m.getWorkStartDate();
             this.title = m.getTitle();
+            this.description = m.getDescription();
             this.status = m.getStatus();
 
             // ✅ 핵심: category 내려주기 (null-safe)
