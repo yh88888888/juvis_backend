@@ -83,8 +83,9 @@ public class SecurityConfig {
 
         if ("prod".equals(profile)) {
             config.setAllowedOriginPatterns(List.of(
-                    "https://아이디진정성.com",
-                    "https://www.아이디진정성.com"));
+                    "https://xn--2z1bt3um9c9vcbxa47e.com",
+                    "https://www.xn--2z1bt3um9c9vcbxa47e.com",
+                    "https://api.xn--2z1bt3um9c9vcbxa47e.com"));
         } else {
             config.setAllowedOriginPatterns(List.of(
                     "http://localhost:*",

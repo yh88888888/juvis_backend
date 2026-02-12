@@ -24,14 +24,30 @@ public class JwtAuthorizationFilter extends OncePerRequestFilter {
         String uri = request.getRequestURI();
 
         // ✅ Actuator는 JWT 필터 완전 제외
-        if (uri.startsWith("/actuator/")) return true;
+        if (uri.startsWith("/actuator/"))
+            return true;
 
         // ✅ 인증/문서
-        if (uri.startsWith("/api/auth/")) return true;
-        if (uri.startsWith("/docs/")) return true;
+        if (uri.startsWith("/api/auth/"))
+            return true;
+        if (uri.startsWith("/docs/"))
+            return true;
 
         // ✅ CORS preflight
-        if ("OPTIONS".equalsIgnoreCase(request.getMethod())) return true;
+        if ("OPTIONS".equalsIgnoreCase(request.getMethod()))
+            return true;
+
+        if (uri.equals("/") || uri.equals("/index.html"))
+            return true;
+        if (uri.startsWith("/assets/"))
+            return true;
+        if (uri.startsWith("/canvaskit/"))
+            return true;
+        if (uri.startsWith("/icons/"))
+            return true;
+        if (uri.endsWith(".js") || uri.endsWith(".css") || uri.endsWith(".png") || uri.endsWith(".ico")
+                || uri.endsWith(".json") || uri.endsWith(".svg"))
+            return true;
 
         return false;
     }
@@ -40,8 +56,7 @@ public class JwtAuthorizationFilter extends OncePerRequestFilter {
     protected void doFilterInternal(
             HttpServletRequest request,
             HttpServletResponse response,
-            FilterChain filterChain
-    ) throws ServletException, IOException {
+            FilterChain filterChain) throws ServletException, IOException {
 
         String authHeader = request.getHeader(JwtUtil.HEADER);
 
@@ -55,27 +70,25 @@ public class JwtAuthorizationFilter extends OncePerRequestFilter {
             User user = JwtUtil.verifyAndExtractUser(authHeader);
 
             var authorities = List.of(
-                    new SimpleGrantedAuthority("ROLE_" + user.getRole().name())
-            );
+                    new SimpleGrantedAuthority("ROLE_" + user.getRole().name()));
 
             var principal = new LoginUser(
                     user.getId(),
                     user.getUsername(),
-                    user.getRole()
-            );
+                    user.getRole());
 
             var authentication = new UsernamePasswordAuthenticationToken(
                     principal,
                     null,
-                    authorities
-            );
+                    authorities);
 
             SecurityContextHolder.getContext().setAuthentication(authentication);
             filterChain.doFilter(request, response);
 
         } catch (Exception e) {
             // (원인 추적 필요하면 잠깐 켜기)
-            // log.warn("JWT auth failed uri={} msg={}", request.getRequestURI(), e.getMessage());
+            // log.warn("JWT auth failed uri={} msg={}", request.getRequestURI(),
+            // e.getMessage());
 
             SecurityContextHolder.clearContext();
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);

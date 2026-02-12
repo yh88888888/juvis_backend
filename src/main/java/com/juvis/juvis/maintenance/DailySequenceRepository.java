@@ -8,10 +8,10 @@ public interface DailySequenceRepository extends JpaRepository<DailySequence, Lo
     // 날짜별 seq 원자적 증가
     @Modifying
     @Query(value = """
-        INSERT INTO daily_sequence (seq_date, seq)
-        VALUES (?1, 1)
-        ON DUPLICATE KEY UPDATE seq = LAST_INSERT_ID(seq + 1)
-        """, nativeQuery = true)
+            INSERT INTO daily_sequence (seq_date, seq)
+            VALUES (?1, LAST_INSERT_ID(1))
+            ON DUPLICATE KEY UPDATE seq = LAST_INSERT_ID(seq + 1)
+            """, nativeQuery = true)
     void upsertAndIncrement(LocalDate date);
 
     @Query(value = "SELECT LAST_INSERT_ID()", nativeQuery = true)

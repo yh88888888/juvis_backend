@@ -33,3 +33,8 @@ Thumbs.db
 
 /src/main/resources/firebase/serviceAccount
 /src/main/resources/firebase/*.json
+
+# build outputs
+bin/
+# secrets
+**/serviceAccount.json
