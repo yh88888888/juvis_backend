@@ -38,3 +38,7 @@ Thumbs.db
 bin/
 # secrets
 **/serviceAccount.json
+
+# JVM crash logs
+hs_err_pid*.log
+replay_pid*.log

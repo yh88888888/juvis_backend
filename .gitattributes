@@ -1,0 +1,16 @@
+* text=auto
+
+# Windows scripts
+*.bat text eol=crlf
+
+# Unix scripts
+*.sh text eol=lf
+gradlew text eol=lf
+
+# Common text
+*.properties text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.java text eol=lf
+*.gradle text eol=lf
+*.md text eol=lf
